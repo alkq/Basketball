@@ -107,7 +107,8 @@ const InlineName: React.FC<{ name: string; onSave: (n: string) => void; classNam
 // MAIN COMPONENT
 // ==========================================
 export const BasketballBoard: React.FC = () => {
-  const [view, setView] = useState<'scoreboard' | 'court'>('scoreboard'); // View switcher state [1]
+  const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
+  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); // View switcher state [1]
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
   const [gameTime, setGameTime] = useState(600);
@@ -278,7 +279,7 @@ export const BasketballBoard: React.FC = () => {
     setDraggedId(null);
   }, [draggedId, executeSubstitution]);
 
-  // Tactical court drag (Clamps updated to 1-99% to allow fully dropping off-court bounds) [3]
+  // Tactical court drag (Clamps updated to 0-100% to allow fully dropping off-court bounds) [3]
   const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
     e.preventDefault();
     setCourtDragId(id);
@@ -288,8 +289,8 @@ export const BasketballBoard: React.FC = () => {
     if (!courtDragId) return;
     const rect = courtRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 1, 99);
-    const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 1, 99);
+    const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
+    const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
     const upd = (prev: Player[]) => prev.map(p => p.id === courtDragId ? { ...p, x, y } : p);
     setHomePlayers(upd);
     setAwayPlayers(upd);
@@ -355,6 +356,10 @@ export const BasketballBoard: React.FC = () => {
                 <button onClick={resetGame}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                   <RotateCcw size={13} /> Reset
+                </button>
+                <button onClick={() => window.open('/court', '_blank')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                  <Move size={13} /> Open Tactical Page
                 </button>
               </div>
             </div>
@@ -648,6 +653,9 @@ export const BasketballBoard: React.FC = () => {
               >
                 {/* Court Inset Boundary Lines (Outer box is inset by 8% to create off-court space) [3] */}
                 <div className="absolute inset-x-[8%] inset-y-[8%] border-2 border-white/50 pointer-events-none">
+                  {/* Top & Bottom baselines (visible edges) */}
+                  <div className="absolute left-0 right-0 h-px bg-white/60 top-0" />
+                  <div className="absolute left-0 right-0 h-px bg-white/60 bottom-0" />
                   {/* Half-court center dividing line */}
                   <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-white/40" />
                   {/* Center circle */}
