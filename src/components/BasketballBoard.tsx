@@ -530,31 +530,29 @@ export const BasketballBoard: React.FC = () => {
               </div>
 
               <div className="p-4">
-                <div className="text-[10px] text-slate-500 mb-2 text-center">Points 1–{maxSheetRows} &nbsp;|&nbsp; Player numbers appear at the cumulative score when they scored</div>
+                <div className="text-[10px] text-slate-500 mb-2 text-center">Point sequence 1–{maxSheetRows}</div>
                 <div className="overflow-x-auto">
-                  <table className="mx-auto border-collapse text-xs">
+                  <table className="mx-auto w-full text-sm border-collapse">
                     <thead>
                       <tr>
-                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-16 text-center">Home</th>
-                        <th className="bg-slate-700/60 text-slate-300 border border-slate-600 px-3 py-1.5 font-bold w-14 text-center">Score</th>
-                        <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-16 text-center">Away</th>
+                        <th className="text-left px-3 py-2 text-slate-400">Point</th>
+                        <th className="text-center px-3 py-2 text-amber-300">Home</th>
+                        <th className="text-center px-3 py-2 text-sky-300">Away</th>
                       </tr>
                     </thead>
                     <tbody>
                       {Array.from({ length: maxSheetRows }, (_, i) => i + 1).map(n => (
                         <tr key={n} className={n % 2 === 0 ? 'bg-slate-800/30' : ''}>
-                          <td className="border border-slate-700/50 px-3 py-0.5 text-center">
+                          <td className="px-3 py-1 text-slate-300">{n}</td>
+                          <td className="px-3 py-1 text-center">
                             {scoresheetMap.home[n] !== undefined
-                              ? <span className="font-black text-amber-400 text-sm">{scoresheetMap.home[n]}</span>
-                              : <span className="text-slate-700">—</span>}
+                              ? <span className="font-bold text-amber-400">{scoresheetMap.home[n]}</span>
+                              : <span className="text-slate-600">—</span>}
                           </td>
-                          <td className="border border-slate-600 px-3 py-0.5 text-center bg-slate-700/30">
-                            <span className="font-bold text-slate-300 tabular-nums">{n}</span>
-                          </td>
-                          <td className="border border-slate-700/50 px-3 py-0.5 text-center">
+                          <td className="px-3 py-1 text-center">
                             {scoresheetMap.away[n] !== undefined
-                              ? <span className="font-black text-sky-400 text-sm">{scoresheetMap.away[n]}</span>
-                              : <span className="text-slate-700">—</span>}
+                              ? <span className="font-bold text-sky-300">{scoresheetMap.away[n]}</span>
+                              : <span className="text-slate-600">—</span>}
                           </td>
                         </tr>
                       ))}
@@ -562,7 +560,7 @@ export const BasketballBoard: React.FC = () => {
                   </table>
                 </div>
 
-                {/* Score stats footer */}
+                {/* Score stats footer (unchanged) */}
                 <div className="mt-4 flex flex-col sm:flex-row gap-3 border-t border-slate-700/40 pt-3">
                   <div className="flex-1">
                     <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
