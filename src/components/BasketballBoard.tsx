@@ -946,25 +946,25 @@ const RosterPanel: React.FC<{
                   </div>
                   
                   {/* Score buttons with stopPropagation to avoid toggling select card */}
-                  <div className="flex flex-col sm:flex-row gap-3 mt-2 w-full items-stretch">
+                  <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
                     {[1, 2, 3].map(p => (
                       <button key={p}
                         onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                        className="bg-slate-700/80 hover:bg-slate-600 text-sm sm:text-base font-bold flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg md:rounded text-white transition-colors active:scale-95">
+                        className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
                         +{p}
                       </button>
                     ))}
                   </div>
                   
                   {/* Foul buttons with stopPropagation */}
-                  <div className="flex flex-col sm:flex-row gap-3 mt-1 w-full items-stretch">
+                  <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
                     <button
                       onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
-                      className="bg-red-900/60 hover:bg-red-800 text-sm sm:text-base font-bold flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg md:rounded text-red-300 transition-colors active:scale-95">+F</button>
+                      className="bg-red-900/60 hover:bg-red-800 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-red-300 transition-colors active:scale-95">+F</button>
                     {player.fouls > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
-                        className="bg-slate-700/50 hover:bg-slate-600 text-sm sm:text-base font-bold flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg md:rounded text-slate-400 transition-colors active:scale-95">-F</button>
+                        className="bg-slate-700/50 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-slate-400 transition-colors active:scale-95">-F</button>
                     )}
                   </div>
                 </div>
