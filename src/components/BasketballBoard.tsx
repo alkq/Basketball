@@ -709,7 +709,7 @@ export const BasketballBoard: React.FC = () => {
                     onPointerDown={e => handleCourtPointerDown(e, player.id)}
                     className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-grab active:cursor-grabbing ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                     style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
-                    <div className={`w-8.5 h-9 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs ${
+                    <div className={`w-9 h-9 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs ${
                       player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                     } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
                       {player.number}
