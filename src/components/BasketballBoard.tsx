@@ -98,7 +98,43 @@ const InlineName: React.FC<{ name: string; onSave: (n: string) => void; classNam
   ) : (
     <span className={`cursor-pointer group-hover:underline decoration-dotted decoration-slate-500 ${className}`} 
       onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit">
-      {name}<Edit3 size={7} className="inline ml-0.5 opacity-30" />
+      {name}
+      <Edit3 size={16} className="inline ml-1 opacity-90 align-middle" />
+    </span>
+  );
+};
+
+// SMALL INLINE NUMBER EDITOR
+const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; className?: string; compact?: boolean }> = ({ num, onSave, className = '', compact = false }) => {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(String(num));
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { setVal(String(num)); }, [num]);
+  useEffect(() => { if (editing) ref.current?.select(); }, [editing]);
+  const save = () => {
+    const v = parseInt(val, 10);
+    if (!isNaN(v) && v !== num) onSave(v);
+    setEditing(false);
+  };
+  if (!editing && compact) {
+    return (
+      <span className={`cursor-pointer ${className}`} onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit number">
+        {num}
+      </span>
+    );
+  }
+
+  return editing ? (
+    <div className={`flex items-center gap-1 ${className}`} onClick={e => e.stopPropagation()}>
+      <input ref={ref} value={val} onChange={e => setVal(e.target.value)} autoFocus
+        onBlur={save} onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        className="w-14 bg-slate-700 border border-slate-600 rounded px-1 py-0 text-sm text-white focus:outline-none" />
+      <button onClick={save}><Check size={12} className="text-emerald-400" /></button>
+    </div>
+  ) : (
+    <span className={`cursor-pointer ${className}`} onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit number">
+      {num}
+      {!compact && <Edit3 size={10} className="inline ml-1 opacity-30" />}
     </span>
   );
 };
@@ -155,18 +191,23 @@ export const BasketballBoard: React.FC = () => {
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
   // Scoresheet map
+  // Build separate cumulative counters for home and away so each team
+  // marks their own cumulative rows independently.
   const scoresheetMap = useMemo(() => {
-    const home: Record<number, number> = {};
-    const away: Record<number, number> = {};
-    let hs = 0, as = 0;
-    for (const ev of gameEvents) {
-      if (ev.type !== 'score') continue;
+    const home: Record<number, { playerNumber: number; playerName: string }> = {};
+    const away: Record<number, { playerNumber: number; playerName: string }> = {};
+    let homeTotal = 0;
+    let awayTotal = 0;
+    // ensure events are processed chronologically by timestamp
+    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    for (const ev of events) {
+      if (!ev.value || ev.value <= 0) continue;
       if (ev.team === 'home') {
-        for (let i = hs + 1; i <= hs + ev.value; i++) home[i] = ev.playerNumber;
-        hs += ev.value;
+        homeTotal += ev.value;
+        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
       } else {
-        for (let i = as + 1; i <= as + ev.value; i++) away[i] = ev.playerNumber;
-        as += ev.value;
+        awayTotal += ev.value;
+        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
       }
     }
     return { home, away };
@@ -209,13 +250,23 @@ export const BasketballBoard: React.FC = () => {
       const court = prev.filter(p => p.status === 'court');
       const target = court[courtIndex];
       if (!target) return prev;
-      const hs = homePlayers.reduce((s, p) => s + p.points, 0);
-      const as = awayPlayers.reduce((s, p) => s + p.points, 0);
-      setGameEvents(evs => [...evs, {
-        id: uid(), type: 'score', team, playerId: target.id,
-        playerNumber: target.number, playerName: target.name,
-        value: pts, homeScoreBefore: hs, awayScoreBefore: as, timestamp: Date.now()
-      }]);
+      // Record the event using existing events to compute prior totals
+      setGameEvents(prevEvs => {
+        const now = Date.now();
+        const hs = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'home').reduce((s, e) => s + e.value, 0);
+        const as = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'away').reduce((s, e) => s + e.value, 0);
+        const newEv = {
+          id: uid(), type: 'score' as const, team, playerId: target.id,
+          playerNumber: target.number, playerName: target.name,
+          value: pts, homeScoreBefore: hs, awayScoreBefore: as, timestamp: now
+        };
+        const last = prevEvs[prevEvs.length - 1];
+        // Ignore near-duplicate events (same player/team/value within 60ms)
+        if (last && last.type === 'score' && last.team === team && last.playerId === target.id && last.value === pts && Math.abs((last.timestamp || 0) - now) < 60) {
+          return prevEvs;
+        }
+        return [...prevEvs, newEv];
+      });
       return prev.map(p => p.id === target.id ? { ...p, points: Math.max(0, p.points + pts) } : p);
     });
   }, [homePlayers, awayPlayers]);
@@ -228,13 +279,21 @@ export const BasketballBoard: React.FC = () => {
       const target = court[courtIndex];
       if (!target) return prev;
       if (delta > 0) {
-        const hs = homePlayers.reduce((s, p) => s + p.points, 0);
-        const as = awayPlayers.reduce((s, p) => s + p.points, 0);
-        setGameEvents(evs => [...evs, {
-          id: uid(), type: 'foul', team, playerId: target.id,
-          playerNumber: target.number, playerName: target.name,
-          value: delta, homeScoreBefore: hs, awayScoreBefore: as, timestamp: Date.now()
-        }]);
+        setGameEvents(prevEvs => {
+          const now = Date.now();
+          const hs = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'home').reduce((s, e) => s + e.value, 0);
+          const as = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'away').reduce((s, e) => s + e.value, 0);
+          const newEv = {
+            id: uid(), type: 'foul' as const, team, playerId: target.id,
+            playerNumber: target.number, playerName: target.name,
+            value: delta, homeScoreBefore: hs, awayScoreBefore: as, timestamp: now
+          };
+          const last = prevEvs[prevEvs.length - 1];
+          if (last && last.type === 'foul' && last.team === team && last.playerId === target.id && last.value === delta && Math.abs((last.timestamp || 0) - now) < 60) {
+            return prevEvs;
+          }
+          return [...prevEvs, newEv];
+        });
       }
       return prev.map(p => p.id === target.id ? { ...p, fouls: Math.max(0, p.fouls + delta) } : p);
     });
@@ -269,6 +328,10 @@ export const BasketballBoard: React.FC = () => {
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev =>
       prev.map(p => p.id === id ? { ...p, name } : p)
     );
+  }, []);
+
+  const changePlayerNumber = useCallback((team: 'home' | 'away', id: string, number: number) => {
+    (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
   }, []);
 
   // Instant substitution selection handlers
@@ -325,10 +388,24 @@ export const BasketballBoard: React.FC = () => {
   }, [inputMins]);
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
+  const [showDebug, setShowDebug] = useState(false);
+  // processed events with cumulative totals for debug
+  const processedEvents = useMemo(() => {
+    let total = 0;
+    return [...gameEvents]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      .map(ev => {
+        if (ev.type === 'score' && ev.value && ev.value > 0) {
+          total += ev.value;
+          return { ...ev, cumulativeTotal: total };
+        }
+        return { ...ev, cumulativeTotal: total };
+      });
+  }, [gameEvents]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="max-w-7xl mx-auto p-3 md:p-5 space-y-4">
+      <div className="max-w-screen-2xl mx-auto p-3 md:p-5 space-y-4">
 
         {/* ── CENTRAL APP NAVIGATION TABS ── */}
         <div className="flex border-b border-slate-700/50 bg-slate-800/40 p-1 rounded-xl">
@@ -401,9 +478,9 @@ export const BasketballBoard: React.FC = () => {
                       {homeScore}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                    <span>Fouls:</span>
-                    <span className={`font-bold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
+                  <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
+                    <span className="text-base md:text-lg">Fouls:</span>
+                    <span className={`ml-2 text-2xl md:text-4xl font-extrabold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
                   </div>
                 </div>
 
@@ -481,9 +558,9 @@ export const BasketballBoard: React.FC = () => {
                       {awayScore}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                    <span>Fouls:</span>
-                    <span className={`font-bold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
+                  <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
+                    <span className="text-base md:text-lg">Fouls:</span>
+                    <span className={`ml-2 text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                 </div>
               </div>
@@ -494,6 +571,7 @@ export const BasketballBoard: React.FC = () => {
               <RosterPanel team="home" players={homePlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
+                onChangeNumber={changePlayerNumber}
                 draggedId={draggedId} dropTargetId={dropTargetId}
                 onDragStart={handleRosterDragStart} onDrop={handleRosterDrop}
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
@@ -503,6 +581,7 @@ export const BasketballBoard: React.FC = () => {
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
+                onChangeNumber={changePlayerNumber}
                 draggedId={draggedId} dropTargetId={dropTargetId}
                 onDragStart={handleRosterDragStart} onDrop={handleRosterDrop}
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
@@ -527,6 +606,9 @@ export const BasketballBoard: React.FC = () => {
                     <span className="text-xs text-slate-400 uppercase tracking-wider">Away</span>
                   </div>
                 </div>
+                <div className="flex items-center justify-center mt-2">
+                  <button onClick={() => setShowDebug(d => !d)} className="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded">{showDebug ? 'Hide' : 'Show'} Debug</button>
+                </div>
               </div>
 
               <div className="p-4">
@@ -535,27 +617,33 @@ export const BasketballBoard: React.FC = () => {
                   <table className="mx-auto w-full text-sm border-collapse">
                     <thead>
                       <tr>
-                        <th className="text-left px-3 py-2 text-slate-400">Point</th>
-                        <th className="text-center px-3 py-2 text-amber-300">Home</th>
-                        <th className="text-center px-3 py-2 text-sky-300">Away</th>
+                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Home</th>
+                        <th className="bg-slate-700/60 text-slate-300 border border-slate-600 px-3 py-1.5 font-bold w-14 text-center">Score</th>
+                        <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Away</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {Array.from({ length: maxSheetRows }, (_, i) => i + 1).map(n => (
-                        <tr key={n} className={n % 2 === 0 ? 'bg-slate-800/30' : ''}>
-                          <td className="px-3 py-1 text-slate-300">{n}</td>
-                          <td className="px-3 py-1 text-center">
-                            {scoresheetMap.home[n] !== undefined
-                              ? <span className="font-bold text-amber-400">{scoresheetMap.home[n]}</span>
-                              : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="px-3 py-1 text-center">
-                            {scoresheetMap.away[n] !== undefined
-                              ? <span className="font-bold text-sky-300">{scoresheetMap.away[n]}</span>
-                              : <span className="text-slate-600">—</span>}
-                          </td>
-                        </tr>
-                      ))}
+                      {Array.from({ length: maxSheetRows }, (_, i) => i + 1).map(n => {
+                        const homeEntry = scoresheetMap.home[n];
+                        const awayEntry = scoresheetMap.away[n];
+                        return (
+                          <tr key={n} className={n % 2 === 0 ? 'bg-slate-800/30' : ''}>
+                            <td className="border border-slate-700/50 px-3 py-0.5 text-center">
+                              {homeEntry !== undefined
+                                ? <span className="font-black text-amber-400 text-sm">#{homeEntry.playerNumber} <span className="text-sm font-medium">{homeEntry.playerName}</span></span>
+                                : <span className="text-slate-700">—</span>}
+                            </td>
+                            <td className="border border-slate-600 px-3 py-0.5 text-center bg-slate-700/30">
+                              <span className="font-bold text-slate-300 tabular-nums">{n}</span>
+                            </td>
+                            <td className="border border-slate-700/50 px-3 py-0.5 text-center">
+                              {awayEntry !== undefined
+                                ? <span className="font-black text-sky-400 text-sm">#{awayEntry.playerNumber} <span className="text-sm font-medium">{awayEntry.playerName}</span></span>
+                                : <span className="text-slate-700">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -566,10 +654,10 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
                     <div className="flex flex-col gap-1">
                       {homeScorers.length > 0 ? homeScorers.map((p, i) => (
-                        <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-900/10 border border-orange-700/20 px-2 py-1 rounded">
-                          <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
-                          <span className="text-[11px] text-amber-200 truncate">#{p.number} {p.name}</span>
-                          <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-900/10 border border-orange-700/20 px-2 py-1 rounded">
+                            <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
+                            <span className="text-sm text-amber-200 truncate">#{p.number} {p.name}</span>
+                            <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
                         </div>
                       )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
@@ -578,10 +666,10 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                        <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
-                          <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
-                          <span className="text-[11px] text-sky-200 truncate">#{p.number} {p.name}</span>
-                          <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                            <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
+                            <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
+                            <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
                         </div>
                       )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
@@ -589,6 +677,14 @@ export const BasketballBoard: React.FC = () => {
                 </div>
                 <p className="text-center text-[10px] text-slate-600 italic mt-2">Player numbers appear at the cumulative score when they scored.</p>
               </div>
+              {showDebug && (
+                <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64">
+                  <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents (chronological)</div>
+                  <pre className="text-[11px] text-slate-200 whitespace-pre-wrap mb-3">{JSON.stringify(processedEvents, null, 2)}</pre>
+                  <div className="text-[11px] font-bold text-slate-300 mb-2">Derived scoresheetMap</div>
+                  <pre className="text-[11px] text-slate-200 whitespace-pre-wrap">{JSON.stringify(scoresheetMap, null, 2)}</pre>
+                </div>
+              )}
             </div>
 
             {/* Events Log (Optional toggle) */}
@@ -606,7 +702,7 @@ export const BasketballBoard: React.FC = () => {
                           <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
                             {ev.team === 'home' ? 'HOME' : 'AWAY'}
                           </span>
-                          <span className="text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
+                          <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
                           <span className={ev.type === 'score' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
                             {ev.type === 'score' ? `+${ev.value} pts` : `+${ev.value} foul`}
                           </span>
@@ -650,7 +746,7 @@ export const BasketballBoard: React.FC = () => {
               <div className="flex items-center gap-3 justify-start pl-4">
                 <span className="text-sm font-bold text-amber-400 uppercase tracking-wider">Home</span>
                 <span className="text-3xl font-black text-orange-500">{homeScore}</span>
-                <span className="text-xs text-slate-400">(Fouls: {homeFouls})</span>
+                <span className="text-sm md:text-base text-slate-300">(Fouls: <span className="font-bold text-2xl md:text-3xl">{homeFouls}</span>)</span>
               </div>
               
               {/* Game Timers */}
@@ -667,7 +763,7 @@ export const BasketballBoard: React.FC = () => {
 
               {/* Away Team Mini Score */}
               <div className="flex items-center gap-3 justify-end pr-4">
-                <span className="text-xs text-slate-400">(Fouls: {awayFouls})</span>
+                <span className="text-sm md:text-base text-slate-300">(Fouls: <span className="font-bold text-2xl md:text-3xl">{awayFouls}</span>)</span>
                 <span className="text-3xl font-black text-blue-500">{awayScore}</span>
                 <span className="text-sm font-bold text-sky-400 uppercase tracking-wider">Away</span>
               </div>
@@ -714,7 +810,7 @@ export const BasketballBoard: React.FC = () => {
                     } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
                       {player.number}
                     </div>
-                    <span className="text-[9px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] truncate">
+                    <span className="text-sm bg-black/85 px-2 py-0.5 rounded text-white mt-0.5 leading-none max-w-[80px] truncate">
                       {player.name}
                     </span>
                   </div>
@@ -740,6 +836,7 @@ const RosterPanel: React.FC<{
   onAddPoints: (team: 'home' | 'away', index: number, pts: number) => void;
   onAddFoul: (team: 'home' | 'away', index: number, delta: number) => void;
   onRename: (team: 'home' | 'away', id: string, name: string) => void;
+  onChangeNumber: (team: 'home' | 'away', id: string, number: number) => void;
   draggedId: string | null;
   dropTargetId: string | null;
   onDragStart: (e: React.DragEvent, id: string) => void;
@@ -751,6 +848,7 @@ const RosterPanel: React.FC<{
   onBenchClick: (id: string) => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
+  onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
   selectedCourtId, onSelectCourt, onBenchClick 
 }) => {
@@ -806,34 +904,39 @@ const RosterPanel: React.FC<{
                     isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
                   } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
 
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-xs mb-0.5 shadow-md ${
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-xs mb-0.5 shadow-md ${
                     isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                   }`}>
-                    {player.number}
+                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact />
                   </div>
                   <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
-                    className="text-[9px] text-slate-300 truncate max-w-[56px] leading-tight group" />
+                    className="text-sm text-slate-300 truncate max-w-[72px] leading-tight group" />
                   <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
-                  <div className={`text-[9px] font-semibold ${player.fouls >= 4 ? 'text-red-400' : 'text-slate-600'}`}>{player.fouls}f</div>
+                  <div className={`mt-1 text-sm text-slate-400 flex items-center gap-2`}>
+                    <span className="text-sm md:text-base">Fouls:</span>
+                    <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-extrabold text-xl md:text-2xl`}>{player.fouls}</span>
+                  </div>
                   
                   {/* Score buttons with stopPropagation to avoid toggling select card */}
-                  <div className="flex gap-0.5 mt-1">
+                  <div className="flex gap-3 mt-2">
                     {[1, 2, 3].map(p => (
-                      <button key={p} 
+                      <button key={p}
                         onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                        className="bg-slate-700/80 hover:bg-slate-600 text-[8px] font-bold px-1 py-0.5 rounded text-white transition-colors active:scale-95">+{p}</button>
+                        className="bg-slate-700/80 hover:bg-slate-600 text-lg md:text-sm font-bold px-5 md:px-2 py-3 md:py-0.5 rounded-lg md:rounded text-white transition-colors active:scale-95 min-w-[64px] md:min-w-0">
+                        +{p}
+                      </button>
                     ))}
                   </div>
                   
                   {/* Foul buttons with stopPropagation */}
-                  <div className="flex gap-0.5 mt-0.5">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }} 
-                      className="bg-red-900/60 hover:bg-red-800 text-[8px] font-bold px-1 py-0.5 rounded text-red-300 transition-colors active:scale-95">+F</button>
+                  <div className="flex gap-3 mt-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
+                      className="bg-red-900/60 hover:bg-red-800 text-lg md:text-sm font-bold px-5 md:px-2 py-3 md:py-0.5 rounded-lg md:rounded text-red-300 transition-colors active:scale-95 min-w-[64px] md:min-w-0">+F</button>
                     {player.fouls > 0 && (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }} 
-                        className="bg-slate-700/50 hover:bg-slate-600 text-[8px] font-bold px-1 py-0.5 rounded text-slate-400 transition-colors active:scale-95">-F</button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
+                        className="bg-slate-700/50 hover:bg-slate-600 text-lg md:text-sm font-bold px-5 md:px-2 py-3 md:py-0.5 rounded-lg md:rounded text-slate-400 transition-colors active:scale-95 min-w-[64px] md:min-w-0">-F</button>
                     )}
                   </div>
                 </div>
@@ -847,7 +950,7 @@ const RosterPanel: React.FC<{
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
           <div className="grid grid-cols-5 gap-1.5">
             {benchPlayers.map(player => (
-              <div key={player.id}
+                <div key={player.id}
                 draggable
                 onDragStart={e => onDragStart(e, player.id)}
                 onDrop={e => onDrop(e, player.id)}
@@ -858,32 +961,30 @@ const RosterPanel: React.FC<{
                   isDragging(player.id) ? 'opacity-40 scale-95' : ''
                 } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-700/40'
                 }`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white/60 font-bold text-[9px] mb-0.5 ${
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] mb-0.5 ${
                   isHome ? 'bg-red-900/50' : 'bg-blue-900/50'
                 }`}>
-                  {player.number}
+                  <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact />
                 </div>
                 <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
-                  className="text-[9px] text-slate-500 truncate max-w-[52px]" />
-                <div className={`text-[9px] ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
+                  className="text-sm text-slate-500 truncate max-w-[72px]" />
+                <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
               </div>
             ))}
           </div>
         </div>
             
-            {/* Player stats: quick per-team scorers under roster */}
+            {/* Player stats: quick per-team scorers under roster (restored style) */}
             <div>
               <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-4">
                 {teamScorers.length > 0 ? teamScorers.map(p => (
-                  <div key={p.id} className={`flex items-center gap-3 px-2 py-1 ${isHome ? 'text-amber-200' : 'text-sky-200'}`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md ${isHome ? 'bg-orange-500/90 border border-orange-600' : 'bg-blue-500/90 border border-blue-600'}`}>
-                      {p.number}
+                  <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
+                      <InlineNumber num={p.number} onSave={(v) => {}} className="text-xs" compact />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="max-w-[10rem] truncate text-[11px]">{p.name}</span>
-                      <span className="ml-2 text-[11px] font-bold">{p.points}pts</span>
-                    </div>
+                    <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
+                    <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
                   </div>
                 )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
               </div>
