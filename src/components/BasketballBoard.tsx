@@ -924,6 +924,7 @@ const RosterPanel: React.FC<{
               return (
                 <div key={player.id}
                   draggable
+                  onContextMenu={e => e.preventDefault()}
                   onDragStart={e => onDragStart(e, player.id)}
                   onDrop={e => onDrop(e, player.id)}
                   onDragOver={e => onDragOver(e, player.id)}
@@ -983,6 +984,7 @@ const RosterPanel: React.FC<{
             {benchPlayers.map(player => (
                 <div key={player.id}
                 draggable
+                onContextMenu={e => e.preventDefault()}
                 onDragStart={e => onDragStart(e, player.id)}
                 onDrop={e => onDrop(e, player.id)}
                 onDragOver={e => onDragOver(e, player.id)}
