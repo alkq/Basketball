@@ -99,8 +99,8 @@ const InlineName: React.FC<{ name: string; onSave: (n: string) => void; classNam
     <span className={`cursor-pointer group-hover:underline decoration-dotted decoration-slate-500 ${className}`} 
       onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit">
       {name}
-      <Edit3 size={16} className="inline ml-1 opacity-90 align-middle" />
-    </span>
+        <Edit3 size={16} className="hidden sm:inline ml-1 opacity-90 align-middle" />
+      </span>
   );
 };
 
@@ -134,7 +134,7 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
   ) : (
     <span className={`cursor-pointer ${className}`} onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit number">
       {num}
-      {!compact && <Edit3 size={10} className="inline ml-1 opacity-30" />}
+      {!compact && <Edit3 size={10} className="hidden sm:inline ml-1 opacity-30" />}
     </span>
   );
 };
@@ -389,6 +389,8 @@ export const BasketballBoard: React.FC = () => {
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
   const [showDebug, setShowDebug] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
   // processed events with cumulative totals for debug
   const processedEvents = useMemo(() => {
     let total = 0;
@@ -438,54 +440,75 @@ export const BasketballBoard: React.FC = () => {
                 <List size={16} className="text-amber-400" />
                 <span className="text-sm font-bold text-amber-400">Game Log</span>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={undoLast} disabled={gameEvents.length === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <Undo2 size={13} /> Undo Last
-                </button>
-                <button onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <FileText size={13} /> Scoresheet PDF
-                </button>
-                <button onClick={() => setShowEvents(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <List size={13} /> Events
-                </button>
-                <button onClick={resetGame}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <RotateCcw size={13} /> Reset
-                </button>
-                <button onClick={() => window.open('/court', '_blank')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <Move size={13} /> Open Tactical Page
-                </button>
+              <div className="flex items-center gap-2">
+                {/* Desktop actions (hidden on small screens) */}
+                <div className="hidden sm:flex items-center gap-2">
+                  <button onClick={undoLast} disabled={gameEvents.length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <Undo2 size={13} /> Undo Last
+                  </button>
+                  <button onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <FileText size={13} /> Scoresheet PDF
+                  </button>
+                  <button onClick={() => setShowEvents(v => !v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <List size={13} /> Events
+                  </button>
+                  <button onClick={resetGame}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <RotateCcw size={13} /> Reset
+                  </button>
+                  <button onClick={() => window.open('/court', '_blank')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <Move size={13} /> Open Tactical Page
+                  </button>
+                </div>
+
+                {/* Mobile actions: single menu button that expands into a vertical list */}
+                <div className="sm:hidden relative">
+                  <button onClick={() => setShowMobileActions(s => !s)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-700/90 text-white text-sm font-semibold">
+                    Actions
+                  </button>
+                  {showMobileActions && (
+                    <div className="absolute right-0 mt-2 w-44 bg-slate-800 border border-slate-700 rounded shadow-lg z-30 p-2 space-y-2">
+                      <button onClick={undoLast} disabled={gameEvents.length === 0}
+                        className="w-full text-left px-2 py-1 rounded bg-amber-700/80 text-white text-sm disabled:opacity-40">Undo Last</button>
+                      <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
+                      <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
+                      <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
+                      <button onClick={() => window.open('/court', '_blank')} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Scoreboard Banner */}
             <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-slate-700/50">
               <div className="absolute inset-0 bg-gradient-to-r from-orange-900/20 via-slate-800 to-blue-900/20 pointer-events-none" />
-              <div className="relative grid grid-cols-3 gap-0">
+              <div className="relative grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {/* Home Team Display */}
-                <div className="flex flex-col items-center justify-center py-5 md:py-7 border-r border-slate-700/40 bg-gradient-to-b from-orange-950/30 to-transparent">
+                <div className="flex flex-col items-center justify-center py-3 sm:py-5 border-r border-slate-700/40 bg-gradient-to-b from-orange-950/30 to-transparent">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Trophy size={16} className="text-amber-500/80" />
                     <h2 className="text-amber-400 text-base md:text-lg font-bold tracking-wider uppercase">Home</h2>
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full opacity-50" />
-                    <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 text-white text-6xl md:text-8xl lg:text-9xl font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums">
+                    <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 text-white text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-black py-3 sm:py-4 px-6 sm:px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums">
                       {homeScore}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
-                    <span className="text-base md:text-lg">Fouls:</span>
-                    <span className={`ml-2 text-2xl md:text-4xl font-extrabold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
+                  <div className="mt-2 flex items-center gap-2 text-sm sm:text-base text-slate-400">
+                    <span className="text-sm sm:text-base">Fouls:</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
                   </div>
                 </div>
 
                 {/* Clock Controllers */}
-                <div className="flex flex-col items-center gap-2.5 py-4 md:py-5 bg-slate-800/50">
+                <div className="col-span-2 sm:col-span-1 order-first sm:order-none flex flex-col items-center gap-2 py-3 sm:gap-2.5 sm:py-4 bg-slate-800/50">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest">Period</span>
                     <button onClick={() => setPeriod(p => Math.max(1, p - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>
@@ -495,7 +518,7 @@ export const BasketballBoard: React.FC = () => {
 
                   <div className="text-center">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">Game Clock</span>
-                    <div className={`text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${gameTime <= 30 && gameTime > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+                    <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${gameTime <= 30 && gameTime > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
                       {formatTime(gameTime)}
                     </div>
                     <div className="flex items-center gap-1.5 mt-1.5 justify-center">
@@ -521,18 +544,18 @@ export const BasketballBoard: React.FC = () => {
 
                   <div className="text-center">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">Shot Clock</span>
-                    <div className={`text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${
+                    <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${
                       shotClock === 0 ? 'text-red-500 animate-bounce' : shotUrgent ? 'text-red-400 animate-pulse' : 'text-rose-400'
                     }`}>
                       {shotClock}
                     </div>
-                    <div className="flex gap-1.5 mt-1.5 justify-center">
+                    <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
                       <button onClick={() => setShotClock(24)}
-                        className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                        className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow transition-all active:scale-95">
                         <RefreshCw size={9} />24s
                       </button>
                       <button onClick={() => setShotClock(14)}
-                        className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                        className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow transition-all active:scale-95">
                         <RefreshCw size={9} />14s
                       </button>
                     </div>
@@ -612,8 +635,11 @@ export const BasketballBoard: React.FC = () => {
               </div>
 
               <div className="p-4">
-                <div className="text-[10px] text-slate-500 mb-2 text-center">Point sequence 1–{maxSheetRows}</div>
-                <div className="overflow-x-auto">
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Point sequence 1–{maxSheetRows}</div>
+                  <button className="sm:hidden text-xs text-amber-300 underline" onClick={() => setShowScoresheetMobile(s => !s)}>{showScoresheetMobile ? 'Hide Scoresheet' : 'Show Scoresheet'}</button>
+                </div>
+                <div className={`${showScoresheetMobile ? 'block' : 'hidden sm:block'} overflow-x-auto`}>
                   <table className="mx-auto w-full text-sm border-collapse">
                     <thead>
                       <tr>
@@ -678,7 +704,7 @@ export const BasketballBoard: React.FC = () => {
                 <p className="text-center text-[10px] text-slate-600 italic mt-2">Player numbers appear at the cumulative score when they scored.</p>
               </div>
               {showDebug && (
-                <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64">
+                <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64 hidden sm:block">
                   <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents (chronological)</div>
                   <pre className="text-[11px] text-slate-200 whitespace-pre-wrap mb-3">{JSON.stringify(processedEvents, null, 2)}</pre>
                   <div className="text-[11px] font-bold text-slate-300 mb-2">Derived scoresheetMap</div>
@@ -715,7 +741,7 @@ export const BasketballBoard: React.FC = () => {
             )}
 
             {/* Quick Guide */}
-            <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-4">
+            <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-4 hidden sm:block">
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Quick Guide</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
@@ -771,12 +797,13 @@ export const BasketballBoard: React.FC = () => {
 
             {/* FULL COURTBOARD DIAGRAM WITH Sideline & Baseline Margins [3] */}
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
+              <div className="w-full overflow-auto">{/* allows horizontal scroll on small screens */}
               <div ref={courtRef}
                 onPointerMove={handleCourtPointerMove}
                 onPointerUp={handleCourtPointerUp}
                 onPointerLeave={handleCourtPointerUp}
                 // Custom out-of-bounds padding allows tokens to drag past the lines [3]
-                className="relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10]"
+                className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10]"
               >
                 {/* Court Inset Boundary Lines (Outer box is inset by 8% to create off-court space) [3] */}
                 <div className="absolute inset-x-[8%] inset-y-[8%] border-2 border-white/50 pointer-events-none">
@@ -805,18 +832,19 @@ export const BasketballBoard: React.FC = () => {
                     onPointerDown={e => handleCourtPointerDown(e, player.id)}
                     className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-grab active:cursor-grabbing ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                     style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
-                    <div className={`w-9 h-9 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs ${
+                    <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
                       player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                     } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
                       {player.number}
                     </div>
-                    <span className="text-sm bg-black/85 px-2 py-0.5 rounded text-white mt-0.5 leading-none max-w-[80px] truncate">
+                      <span className="text-sm bg-black/85 px-2 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
                       {player.name}
                     </span>
                   </div>
                 ))}
               </div>
-            </div>
+                </div>
+              </div>
             
             <p className="text-center text-xs text-slate-500 italic">💡 The court lines are inset. You can drag and position player tokens completely outside of the white boundary lines.</p>
           </div>
@@ -887,7 +915,7 @@ const RosterPanel: React.FC<{
         {/* Court */}
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
@@ -904,39 +932,39 @@ const RosterPanel: React.FC<{
                     isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
                   } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
 
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-xs mb-0.5 shadow-md ${
+                  <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-white font-black text-xs md:text-sm mb-0.5 shadow-md ${
                     isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                   }`}>
                     <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact />
                   </div>
                   <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
-                    className="text-sm text-slate-300 truncate max-w-[72px] leading-tight group" />
+                    className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
                   <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
-                  <div className={`mt-1 text-sm text-slate-400 flex items-center gap-2`}>
-                    <span className="text-sm md:text-base">Fouls:</span>
-                    <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-extrabold text-xl md:text-2xl`}>{player.fouls}</span>
+                  <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
+                    <span className="text-xs md:text-sm">Fouls:</span>
+                    <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-bold text-sm md:text-base`}>{player.fouls}</span>
                   </div>
                   
                   {/* Score buttons with stopPropagation to avoid toggling select card */}
-                  <div className="flex gap-3 mt-2">
+                  <div className="flex flex-col sm:flex-row gap-3 mt-2 w-full items-stretch">
                     {[1, 2, 3].map(p => (
                       <button key={p}
                         onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                        className="bg-slate-700/80 hover:bg-slate-600 text-lg md:text-sm font-bold px-5 md:px-2 py-3 md:py-0.5 rounded-lg md:rounded text-white transition-colors active:scale-95 min-w-[64px] md:min-w-0">
+                        className="bg-slate-700/80 hover:bg-slate-600 text-sm sm:text-base font-bold flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg md:rounded text-white transition-colors active:scale-95">
                         +{p}
                       </button>
                     ))}
                   </div>
                   
                   {/* Foul buttons with stopPropagation */}
-                  <div className="flex gap-3 mt-1">
+                  <div className="flex flex-col sm:flex-row gap-3 mt-1 w-full items-stretch">
                     <button
                       onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
-                      className="bg-red-900/60 hover:bg-red-800 text-lg md:text-sm font-bold px-5 md:px-2 py-3 md:py-0.5 rounded-lg md:rounded text-red-300 transition-colors active:scale-95 min-w-[64px] md:min-w-0">+F</button>
+                      className="bg-red-900/60 hover:bg-red-800 text-sm sm:text-base font-bold flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg md:rounded text-red-300 transition-colors active:scale-95">+F</button>
                     {player.fouls > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
-                        className="bg-slate-700/50 hover:bg-slate-600 text-lg md:text-sm font-bold px-5 md:px-2 py-3 md:py-0.5 rounded-lg md:rounded text-slate-400 transition-colors active:scale-95 min-w-[64px] md:min-w-0">-F</button>
+                        className="bg-slate-700/50 hover:bg-slate-600 text-sm sm:text-base font-bold flex items-center justify-center w-10 h-10 sm:w-auto sm:h-auto sm:px-3 sm:py-2 rounded-lg md:rounded text-slate-400 transition-colors active:scale-95">-F</button>
                     )}
                   </div>
                 </div>
@@ -948,7 +976,7 @@ const RosterPanel: React.FC<{
         {/* Bench */}
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {benchPlayers.map(player => (
                 <div key={player.id}
                 draggable
@@ -961,13 +989,13 @@ const RosterPanel: React.FC<{
                   isDragging(player.id) ? 'opacity-40 scale-95' : ''
                 } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-700/40'
                 }`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] mb-0.5 ${
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
                   isHome ? 'bg-red-900/50' : 'bg-blue-900/50'
                 }`}>
                   <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact />
                 </div>
                 <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
-                  className="text-sm text-slate-500 truncate max-w-[72px]" />
+                  className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
                 <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
               </div>
             ))}
