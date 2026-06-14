@@ -115,6 +115,7 @@ export const BasketballBoard: React.FC = () => {
   const [shotClock, setShotClock] = useState(24);
   const [isRunning, setIsRunning] = useState(false);
   const [inputMins, setInputMins] = useState('10');
+  const [clockMode, setClockMode] = useState<'countdown' | 'stopwatch'>('countdown');
   const [period, setPeriod] = useState(1);
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
@@ -134,11 +135,18 @@ export const BasketballBoard: React.FC = () => {
   useEffect(() => {
     if (!isRunning) return;
     const t = setInterval(() => {
-      setGameTime(p => { if (p <= 1) { setIsRunning(false); return 0; } return p - 1; });
+      setGameTime(p => {
+        if (clockMode === 'countdown') {
+          if (p <= 1) { setIsRunning(false); return 0; }
+          return p - 1;
+        }
+        // stopwatch (count up)
+        return p + 1;
+      });
       setShotClock(p => p <= 1 ? 0 : p - 1);
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning]);
+  }, [isRunning, clockMode]);
 
   // Derived values
   const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
@@ -300,7 +308,10 @@ export const BasketballBoard: React.FC = () => {
 
   const handleSetTime = useCallback(() => {
     const m = parseInt(inputMins, 10);
-    if (!isNaN(m) && m > 0) setGameTime(m * 60);
+    if (!isNaN(m) && m >= 0) {
+      setGameTime(m * 60);
+      setIsRunning(false);
+    }
   }, [inputMins]);
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
@@ -401,11 +412,21 @@ export const BasketballBoard: React.FC = () => {
                       {formatTime(gameTime)}
                     </div>
                     <div className="flex items-center gap-1.5 mt-1.5 justify-center">
-                      <input type="number" min="1" max="99" value={inputMins} onChange={e => setInputMins(e.target.value)}
-                        className="w-10 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
+                      <input type="number" min="0" max="999" value={inputMins} onChange={e => setInputMins(e.target.value)}
+                        className="w-12 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
                       <button onClick={handleSetTime} className="bg-slate-600 hover:bg-slate-500 text-white text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1">
                         <Timer size={10} />Set
                       </button>
+                      <div className="ml-2 inline-flex rounded overflow-hidden border border-slate-700/50">
+                        <button onClick={() => setClockMode('countdown')}
+                          className={`px-2 text-[10px] py-0.5 ${clockMode === 'countdown' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                          Countdown
+                        </button>
+                        <button onClick={() => setClockMode('stopwatch')}
+                          className={`px-2 text-[10px] py-0.5 ${clockMode === 'stopwatch' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                          Stopwatch
+                        </button>
+                      </div>
                     </div>
                   </div>
 
