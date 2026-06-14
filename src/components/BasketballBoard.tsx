@@ -874,11 +874,16 @@ const RosterPanel: React.FC<{
             {/* Player stats: quick per-team scorers under roster */}
             <div>
               <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
-              <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex flex-wrap gap-2">
                 {teamScorers.length > 0 ? teamScorers.map(p => (
-                  <div key={p.id} title={`#${p.number} ${p.name} — ${p.points} pts`} className={`w-12 h-12 rounded-full flex-shrink-0 flex flex-col items-center justify-center border text-[12px] ${isHome ? 'bg-orange-900/10 border-orange-700/20 text-amber-200' : 'bg-blue-900/10 border-blue-700/20 text-sky-200'}`}>
-                    <div className="font-black">#{p.number}</div>
-                    <div className="text-[10px] font-semibold mt-0.5">{p.points}pt</div>
+                  <div key={p.id} className={`flex items-center gap-3 px-2 py-1 ${isHome ? 'text-amber-200' : 'text-sky-200'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md ${isHome ? 'bg-orange-500/90 border border-orange-600' : 'bg-blue-500/90 border border-blue-600'}`}>
+                      {p.number}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="max-w-[10rem] truncate text-[11px]">{p.name}</span>
+                      <span className="ml-2 text-[11px] font-bold">{p.points}pts</span>
+                    </div>
                   </div>
                 )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
               </div>
