@@ -174,6 +174,16 @@ export const BasketballBoard: React.FC = () => {
 
   const maxSheetRows = Math.max(homeScore, awayScore, 20);
 
+  // Sorted scorers lists (highest -> lowest), only players with points > 0
+  const homeScorers = useMemo(() =>
+    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [homePlayers]
+  );
+  const awayScorers = useMemo(() =>
+    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [awayPlayers]
+  );
+
   // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
     if (id1 === id2) return;
@@ -555,25 +565,27 @@ export const BasketballBoard: React.FC = () => {
                 {/* Score stats footer */}
                 <div className="mt-4 flex flex-col sm:flex-row gap-3 border-t border-slate-700/40 pt-3">
                   <div className="flex-1">
-                    <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Home Players</div>
-                    <div className="flex flex-wrap gap-2">
-                      {homePlayers.filter(p => p.points > 0).map(p => (
-                        <span key={p.id} className="text-[10px] bg-orange-900/30 border border-orange-700/40 px-2 py-0.5 rounded text-amber-300">
-                          #{p.number} {p.name} — {p.points}pts
-                        </span>
-                      ))}
-                      {homePlayers.filter(p => p.points > 0).length === 0 && <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+                    <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
+                    <div className="flex flex-col gap-1">
+                      {homeScorers.length > 0 ? homeScorers.map((p, i) => (
+                        <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-900/10 border border-orange-700/20 px-2 py-1 rounded">
+                          <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
+                          <span className="text-[11px] text-amber-200 truncate">#{p.number} {p.name}</span>
+                          <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
+                        </div>
+                      )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
                   </div>
                   <div className="flex-1">
-                    <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Away Players</div>
-                    <div className="flex flex-wrap gap-2">
-                      {awayPlayers.filter(p => p.points > 0).map(p => (
-                        <span key={p.id} className="text-[10px] bg-blue-900/30 border border-blue-700/40 px-2 py-0.5 rounded text-sky-300">
-                          #{p.number} {p.name} — {p.points}pts
-                        </span>
-                      ))}
-                      {awayPlayers.filter(p => p.points > 0).length === 0 && <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+                    <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
+                    <div className="flex flex-col gap-1">
+                      {awayScorers.length > 0 ? awayScorers.map((p, i) => (
+                        <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
+                          <span className="text-[11px] text-sky-200 truncate">#{p.number} {p.name}</span>
+                          <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
+                        </div>
+                      )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
                   </div>
                 </div>
