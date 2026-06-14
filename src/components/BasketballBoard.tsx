@@ -763,6 +763,9 @@ const RosterPanel: React.FC<{
   const courtPlayers = players.filter(p => p.status === 'court');
   const benchPlayers = players.filter(p => p.status === 'bench');
 
+  // Per-team sorted scorers (highest -> lowest), only players who scored
+  const teamScorers = [...players].filter(p => p.points > 0).sort((a, b) => b.points - a.points);
+
   const isDropTarget = (id: string) => dropTargetId === id && draggedId !== null && draggedId !== id;
   const isDragging = (id: string) => draggedId === id;
 
@@ -867,6 +870,18 @@ const RosterPanel: React.FC<{
             ))}
           </div>
         </div>
+            
+            {/* Player stats: quick per-team scorers under roster */}
+            <div>
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
+              <div className="flex flex-wrap gap-2">
+                {teamScorers.length > 0 ? teamScorers.map(p => (
+                  <span key={p.id} className={`text-[11px] px-2 py-1 rounded-full border ${isHome ? 'bg-orange-900/10 border-orange-700/20 text-amber-200' : 'bg-blue-900/10 border-blue-700/20 text-sky-200'}`}>
+                    #{p.number} | <span className="font-bold ml-1">{p.points}pts</span>
+                  </span>
+                )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+              </div>
+            </div>
       </div>
     </div>
   );
