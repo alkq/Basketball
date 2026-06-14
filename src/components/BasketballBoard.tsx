@@ -889,8 +889,11 @@ const RosterPanel: React.FC<{
   const courtPlayers = players.filter(p => p.status === 'court');
   const benchPlayers = players.filter(p => p.status === 'bench');
 
-  // Per-team sorted scorers (highest -> lowest), only players who scored
-  const teamScorers = [...players].filter(p => p.points > 0).sort((a, b) => b.points - a.points);
+  // Per-team sorted scorers (highest -> lowest). Include players who have fouls
+  // even if they haven't scored, and sort by points then fouls.
+  const teamScorers = [...players]
+    .filter(p => p.points > 0 || p.fouls > 0)
+    .sort((a, b) => (b.points - a.points) || (b.fouls - a.fouls));
 
   const isDropTarget = (id: string) => dropTargetId === id && draggedId !== null && draggedId !== id;
   const isDragging = (id: string) => draggedId === id;
@@ -1011,9 +1014,12 @@ const RosterPanel: React.FC<{
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
                       <InlineNumber num={p.number} onSave={(v) => {}} className="text-xs" compact />
                     </div>
-                    <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">Fouls: <span className={`font-bold ${p.fouls >= 4 ? 'text-red-400' : isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.fouls}</span></span>
+                    </div>
                     <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
-                  </div>
+                </div>
                 )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
               </div>
             </div>
