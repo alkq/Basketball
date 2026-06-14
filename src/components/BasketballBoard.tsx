@@ -876,8 +876,9 @@ const RosterPanel: React.FC<{
               <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
               <div className="flex flex-wrap gap-2">
                 {teamScorers.length > 0 ? teamScorers.map(p => (
-                  <span key={p.id} className={`text-[11px] px-2 py-1 rounded-full border ${isHome ? 'bg-orange-900/10 border-orange-700/20 text-amber-200' : 'bg-blue-900/10 border-blue-700/20 text-sky-200'}`}>
-                    #{p.number} | <span className="font-bold ml-1">{p.points}pts</span>
+                  <span key={p.id} className={`text-[11px] px-2 py-1 rounded-full border flex items-center gap-2 ${isHome ? 'bg-orange-900/10 border-orange-700/20 text-amber-200' : 'bg-blue-900/10 border-blue-700/20 text-sky-200'}`}>
+                    <span className="max-w-[10rem] truncate font-semibold">#{p.number} {p.name}</span>
+                    <span className="font-bold ml-1">{p.points}pts</span>
                   </span>
                 )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
               </div>
