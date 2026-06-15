@@ -167,6 +167,7 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
 export const BasketballBoard: React.FC = () => {
   const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); // Active Sync Role
   const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); // Manual Sync Toggle state [2]
+  const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED'); // Realtime Status Logger
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
   const [view, setView] = useState<'scoreboard' | 'court'>(initialView); // View switcher state
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
@@ -204,7 +205,53 @@ export const BasketballBoard: React.FC = () => {
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // Refs for local popup sync & Supabase channel references [2]
+  // Scoresheet map (Declared before effects use them) [1.2.6]
+  const scoresheetMap = useMemo(() => {
+    const home: Record<number, { playerNumber: number; playerName: string }> = {};
+    const away: Record<number, { playerNumber: number; playerName: string }> = {};
+    let homeTotal = 0;
+    let awayTotal = 0;
+    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    for (const ev of events) {
+      if (!ev.value || ev.value <= 0) continue;
+      if (ev.team === 'home') {
+        homeTotal += ev.value;
+        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      } else {
+        awayTotal += ev.value;
+        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      }
+    }
+    return { home, away };
+  }, [gameEvents]);
+
+  const maxSheetRows = Math.max(homeScore, awayScore, 20);
+
+  // Sorted scorers lists (highest -> lowest), only players with points > 0
+  const homeScorers = useMemo(() =>
+    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [homePlayers]
+  );
+  const awayScorers = useMemo(() =>
+    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [awayPlayers]
+  );
+
+  // Processed events (Declared before JSX rendering use) [1.2.6]
+  const processedEvents = useMemo(() => {
+    let total = 0;
+    return [...gameEvents]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      .map(ev => {
+        if (ev.type === 'score' && ev.value && ev.value > 0) {
+          total += ev.value;
+          return { ...ev, cumulativeTotal: total };
+        }
+        return { ...ev, cumulativeTotal: total };
+      });
+  }, [gameEvents]);
+
+  // Refs for local popup sync
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
@@ -236,7 +283,12 @@ export const BasketballBoard: React.FC = () => {
 
   // ── 3. ESTABLISH A SINGLE STABLE BROADCAST CHANNEL WITH ACTIVE SUBSCRIPTION ── [2]
   useEffect(() => {
-    if (!supabase || !isSyncEnabled) return;
+    if (!supabase || !isSyncEnabled) {
+      setSyncStatus('OFFLINE');
+      return;
+    }
+
+    setSyncStatus('CONNECTING...');
 
     // Create a stable channel and subscribe to it permanently
     const channel = supabase.channel('basketball-sync', {
@@ -246,7 +298,7 @@ export const BasketballBoard: React.FC = () => {
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
         if (mode === 'viewer') {
-          const data = response; // FIXED: Supabase passes the raw payload directly as the parameter [1.2.7]
+          const data = response.payload; // Envelope wrapper is correct for payload structures
           if (!data) return;
           setHomePlayers(data.homePlayers);
           setAwayPlayers(data.awayPlayers);
@@ -259,7 +311,17 @@ export const BasketballBoard: React.FC = () => {
           setClockMode(data.clockMode);
         }
       })
-      .subscribe();
+      .subscribe((status, err) => {
+        // Track the connection status
+        if (status === 'SUBSCRIBED') {
+          setSyncStatus('SUBSCRIBED');
+        } else if (status === 'CHANNEL_ERROR') {
+          setSyncStatus('ERROR');
+          console.error("Supabase Realtime Channel Error:", err);
+        } else {
+          setSyncStatus(status);
+        }
+      });
 
     syncChannelRef.current = channel;
 
@@ -336,38 +398,6 @@ export const BasketballBoard: React.FC = () => {
     }, 1000);
     return () => clearInterval(t);
   }, [isRunning, clockMode]);
-
-  // Scoresheet map
-  const scoresheetMap = useMemo(() => {
-    const home: Record<number, { playerNumber: number; playerName: string }> = {};
-    const away: Record<number, { playerNumber: number; playerName: string }> = {};
-    let homeTotal = 0;
-    let awayTotal = 0;
-    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    for (const ev of events) {
-      if (!ev.value || ev.value <= 0) continue;
-      if (ev.team === 'home') {
-        homeTotal += ev.value;
-        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      } else {
-        awayTotal += ev.value;
-        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      }
-    }
-    return { home, away };
-  }, [gameEvents]);
-
-  const maxSheetRows = Math.max(homeScore, awayScore, 20);
-
-  // Sorted scorers lists (highest -> lowest), only players with points > 0
-  const homeScorers = useMemo(() =>
-    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [homePlayers]
-  );
-  const awayScorers = useMemo(() =>
-    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [awayPlayers]
-  );
 
   // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
@@ -548,20 +578,6 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
 
-  // Processed events
-  const processedEvents = useMemo(() => {
-    let total = 0;
-    return [...gameEvents]
-      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-      .map(ev => {
-        if (ev.type === 'score' && ev.value && ev.value > 0) {
-          total += ev.value;
-          return { ...ev, cumulativeTotal: total };
-        }
-        return { ...ev, cumulativeTotal: total };
-      });
-  }, [gameEvents]);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
       <div className="max-w-screen-2xl mx-auto p-3 md:p-5 space-y-4">
@@ -570,10 +586,14 @@ export const BasketballBoard: React.FC = () => {
         <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-700/40 shadow-inner">
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sync Connection:</span>
-            <span className={`inline-block w-2.5 h-2.5 rounded-full ${supabase && isSyncEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+              supabase && isSyncEnabled 
+                ? (syncStatus === 'SUBSCRIBED' ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500') 
+                : 'bg-red-500'
+            }`} />
             <span className="text-xs text-slate-400 font-medium">
               {supabase && isSyncEnabled 
-                ? 'Connected to Realtime' 
+                ? `Connected (${syncStatus})` 
                 : !supabase 
                   ? 'Offline Mode (Configure VITE_SUPABASE_URL)' 
                   : 'Sync Connection Closed'}
@@ -922,7 +942,7 @@ export const BasketballBoard: React.FC = () => {
                 <p className="text-center text-[10px] text-slate-600 italic mt-2">Player numbers appear at the cumulative score when they scored.</p>
               </div>
               
-              {/* FIXED STRUCTURAL TAG ERROR: Removed the extra closing </div> on line 593 that closed the scoresheet container prematurely. [1.1.2] */}
+              {/* FIXED STRUCTURAL TAG ERROR: Removed the extra closing </div> on line 593 that closed the scoresheet container prematurely. */}
               {showDebug && (
                 <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64 hidden sm:block">
                   <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents (chronological)</div>
@@ -1160,7 +1180,7 @@ const RosterPanel: React.FC<{
                     <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                   </div>
                   <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                    className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
+                    className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px]" />
                   <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
                   <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
                     <span className="text-xs md:text-sm">Fouls:</span>
@@ -1214,7 +1234,7 @@ const RosterPanel: React.FC<{
                 onClick={() => onBenchClick(player.id)}
                 className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
                   isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105'}
+                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}
                 `}>
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
                   isHome ? 'bg-red-900/50' : 'bg-blue-900/50'
