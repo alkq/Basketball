@@ -793,7 +793,7 @@ export const BasketballBoard: React.FC = () => {
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
                     <span className="text-base md:text-lg">Fouls:</span>
-                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
+                    <span className={`ml-2 text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                 </div>
               </div>
@@ -922,33 +922,6 @@ export const BasketballBoard: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* Events Log (Optional toggle) */}
-            {showEvents && (
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-bold text-slate-300">Recent Events</span>
-                  <span className="text-[10px] text-slate-500">(newest first)</span>
-                </div>
-                {gameEvents.length === 0
-                  ? <p className="text-[11px] text-slate-500 italic text-center py-4">No events yet. Select a player to record points or fouls.</p>
-                  : <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                      {[...gameEvents].reverse().map(ev => (
-                        <div key={ev.id} className="flex items-center gap-3 text-[11px] py-1 border-b border-slate-700/30">
-                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
-                            {ev.team === 'home' ? 'HOME' : 'AWAY'}
-                          </span>
-                          <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
-                          <span className={ev.type === 'score' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                            {ev.type === 'score' ? `+${ev.value} pts` : `+${ev.value} foul`}
-                          </span>
-                          <span className="text-slate-600 ml-auto">{ev.homeScoreBefore + (ev.team === 'home' && ev.type === 'score' ? ev.value : 0)} – {ev.awayScoreBefore + (ev.team === 'away' && ev.type === 'score' ? ev.value : 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-                }
-              </div>
-            )}
 
             {/* Quick Guide */}
             <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-4 hidden sm:block">
