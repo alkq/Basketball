@@ -180,6 +180,11 @@ export const BasketballBoard: React.FC = () => {
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
 
+  // UI States (Correctly Declared)
+  const [showDebug, setShowDebug] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
+
   // Instant Click Substitution state
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
 
@@ -198,6 +203,52 @@ export const BasketballBoard: React.FC = () => {
   const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+
+  // Scoresheet map (Declared before effects use them) [1.2.6]
+  const scoresheetMap = useMemo(() => {
+    const home: Record<number, { playerNumber: number; playerName: string }> = {};
+    const away: Record<number, { playerNumber: number; playerName: string }> = {};
+    let homeTotal = 0;
+    let awayTotal = 0;
+    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    for (const ev of events) {
+      if (!ev.value || ev.value <= 0) continue;
+      if (ev.team === 'home') {
+        homeTotal += ev.value;
+        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      } else {
+        awayTotal += ev.value;
+        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      }
+    }
+    return { home, away };
+  }, [gameEvents]);
+
+  const maxSheetRows = Math.max(homeScore, awayScore, 20);
+
+  // Sorted scorers lists (highest -> lowest), only players with points > 0
+  const homeScorers = useMemo(() =>
+    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [homePlayers]
+  );
+  const awayScorers = useMemo(() =>
+    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [awayPlayers]
+  );
+
+  // Processed events (Declared before JSX rendering use) [1.2.6]
+  const processedEvents = useMemo(() => {
+    let total = 0;
+    return [...gameEvents]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      .map(ev => {
+        if (ev.type === 'score' && ev.value && ev.value > 0) {
+          total += ev.value;
+          return { ...ev, cumulativeTotal: total };
+        }
+        return { ...ev, cumulativeTotal: total };
+      });
+  }, [gameEvents]);
 
   // Refs for local popup sync
   const bcRef = useRef<BroadcastChannel | null>(null);
@@ -325,38 +376,6 @@ export const BasketballBoard: React.FC = () => {
     }, 1000);
     return () => clearInterval(t);
   }, [isRunning, clockMode]);
-
-  // Scoresheet map
-  const scoresheetMap = useMemo(() => {
-    const home: Record<number, { playerNumber: number; playerName: string }> = {};
-    const away: Record<number, { playerNumber: number; playerName: string }> = {};
-    let homeTotal = 0;
-    let awayTotal = 0;
-    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    for (const ev of events) {
-      if (!ev.value || ev.value <= 0) continue;
-      if (ev.team === 'home') {
-        homeTotal += ev.value;
-        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      } else {
-        awayTotal += ev.value;
-        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      }
-    }
-    return { home, away };
-  }, [gameEvents]);
-
-  const maxSheetRows = Math.max(homeScore, awayScore, 20);
-
-  // Sorted scorers lists (highest -> lowest), only players with points > 0
-  const homeScorers = useMemo(() =>
-    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [homePlayers]
-  );
-  const awayScorers = useMemo(() =>
-    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [awayPlayers]
-  );
 
   // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
@@ -516,9 +535,6 @@ export const BasketballBoard: React.FC = () => {
   }, [inputMins, isViewer]);
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
-  const [showDebug, setShowDebug] = useState(false);
-  const [showMobileActions, setShowMobileActions] = useState(false);
-  const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
 
   // Opens local display popup via BroadcastChannel [1]
   const openDisplay = useCallback(() => {
@@ -539,20 +555,6 @@ export const BasketballBoard: React.FC = () => {
       // ignore
     }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
-
-  // Processed events
-  const processedEvents = useMemo(() => {
-    let total = 0;
-    return [...gameEvents]
-      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-      .map(ev => {
-        if (ev.type === 'score' && ev.value && ev.value > 0) {
-          total += ev.value;
-          return { ...ev, cumulativeTotal: total };
-        }
-        return { ...ev, cumulativeTotal: total };
-      });
-  }, [gameEvents]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
@@ -793,7 +795,7 @@ export const BasketballBoard: React.FC = () => {
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
                     <span className="text-base md:text-lg">Fouls:</span>
-                    <span className={`ml-2 text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                 </div>
               </div>
@@ -913,6 +915,8 @@ export const BasketballBoard: React.FC = () => {
                 </div>
                 <p className="text-center text-[10px] text-slate-600 italic mt-2">Player numbers appear at the cumulative score when they scored.</p>
               </div>
+              
+              {/* FIXED STRUCTURAL TAG ERROR: Removed the extra closing </div> on line 593 that closed the scoresheet container prematurely. [1.1.2] */}
               {showDebug && (
                 <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64 hidden sm:block">
                   <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents (chronological)</div>
@@ -922,6 +926,33 @@ export const BasketballBoard: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Events Log (Optional toggle) */}
+            {showEvents && (
+              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-bold text-slate-300">Recent Events</span>
+                  <span className="text-[10px] text-slate-500">(newest first)</span>
+                </div>
+                {gameEvents.length === 0
+                  ? <p className="text-[11px] text-slate-500 italic text-center py-4">No events yet. Select a player to record points or fouls.</p>
+                  : <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                      {[...gameEvents].reverse().map(ev => (
+                        <div key={ev.id} className="flex items-center gap-3 text-[11px] py-1 border-b border-slate-700/30">
+                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
+                            {ev.team === 'home' ? 'HOME' : 'AWAY'}
+                          </span>
+                          <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
+                          <span className={ev.type === 'score' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+                            {ev.type === 'score' ? `+${ev.value} pts` : `+${ev.value} foul`}
+                          </span>
+                          <span className="text-slate-600 ml-auto">{ev.homeScoreBefore + (ev.team === 'home' && ev.type === 'score' ? ev.value : 0)} – {ev.awayScoreBefore + (ev.team === 'away' && ev.type === 'score' ? ev.value : 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                }
+              </div>
+            )}
 
             {/* Quick Guide */}
             <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-4 hidden sm:block">
@@ -982,8 +1013,8 @@ export const BasketballBoard: React.FC = () => {
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
               <div className="w-full overflow-auto">{/* allows horizontal scroll on small screens */}
               <div ref={courtRef}
-                // Custom out-of-bounds padding allows tokens to drag past the lines [3]
-                className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10]"
+                // Custom out-of-bounds padding allows tokens to drag past the lines (using touch-none for touchscreen safety) [3]
+                className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10] touch-none"
               >
                 {/* Court Inset Boundary Lines (Outer box is inset by 8% to create off-court space) [3] */}
                 <div className="absolute inset-x-[8%] inset-y-[8%] border-2 border-white/50 pointer-events-none">
@@ -1010,7 +1041,7 @@ export const BasketballBoard: React.FC = () => {
                 {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
                   <div key={player.id}
                     onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-grab active:cursor-grabbing ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                     style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
                     <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
                       player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
