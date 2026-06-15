@@ -1249,7 +1249,7 @@ const RosterPanel: React.FC<{
           </div>
         </div>
             
-            {/* Player stats: quick per-team scorers under roster (restored style) */}
+            {/* Player stats: quick per-team scorers under roster (restored style yes) */}
             <div>
               <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
               <div className="flex items-center gap-4 text-xs">
