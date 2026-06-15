@@ -391,6 +391,111 @@ export const BasketballBoard: React.FC = () => {
   const [showDebug, setShowDebug] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
+  const bcRef = useRef<BroadcastChannel | null>(null);
+  const socketRef = useRef<any>(null);
+
+  useEffect(() => {
+    try {
+      bcRef.current = new BroadcastChannel('scoreboard');
+      const chan = bcRef.current;
+      chan.onmessage = (ev) => {
+        if (!ev.data) return;
+        if (ev.data.type === 'request') {
+          chan.postMessage({ type: 'init', state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers } });
+        }
+      };
+      return () => { chan.close(); bcRef.current = null; };
+    } catch (e) {
+      // BroadcastChannel may not be available in some environments
+      bcRef.current = null;
+    }
+  }, []);
+
+  // Socket.IO client for LAN remote tablet support. Connects to port 3000 on host.
+  useEffect(() => {
+    (async () => {
+      try {
+        // dynamic import to avoid top-level dependency issues
+        // @ts-ignore
+        const { io } = await import('socket.io-client');
+        const socketUrl = (import.meta as any).env?.VITE_SOCKET_URL || `http://${window.location.hostname || 'localhost'}:3000`;
+        const socket = io(socketUrl);
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+          // send current full state
+          socket.emit('state', { homePlayers, awayPlayers, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls });
+        });
+
+        socket.on('state', (s: any) => {
+          if (!s) return;
+          if (s.homePlayers) setHomePlayers(s.homePlayers);
+          if (s.awayPlayers) setAwayPlayers(s.awayPlayers);
+          if (typeof s.gameTime === 'number') setGameTime(s.gameTime);
+          if (typeof s.shotClock === 'number') setShotClock(s.shotClock);
+          if (typeof s.period === 'number') setPeriod(s.period);
+          if (typeof s.homeScore === 'number' || typeof s.awayScore === 'number') {
+            // scores are derived from players; keep them consistent by not forcing
+          }
+        });
+
+        socket.on('control', (msg: any) => {
+          // Support basic control messages if needed in future
+          // e.g. { type: 'reset' }
+          if (!msg) return;
+          if (msg.type === 'reset') resetGame();
+        });
+
+        return () => { socket.disconnect(); socketRef.current = null; };
+      } catch (e) {
+        // socket.io-client not installed or connection failed
+        socketRef.current = null;
+      }
+    })();
+  }, []);
+
+  // Publish score updates
+  useEffect(() => {
+    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls };
+    try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
+    try { socketRef.current?.emit && socketRef.current.emit('state', { homePlayers, awayPlayers, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls }); } catch (e) { /* ignore */ }
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
+
+  const openDisplay = useCallback(() => {
+    (async () => {
+      try {
+        const features = 'toolbar=0,location=0,menubar=0,resizable=1,scrollbars=0,width=1280,height=720';
+        const win = window.open('/display', 'scoreboard_display', features);
+
+        // Try to position the window on an external screen when supported
+        try {
+          const gp = (navigator as any).getScreens || (window as any).getScreenDetails;
+          if (gp) {
+            const details = await gp.call(navigator || window);
+            const screens = details.screens || details;
+            if (Array.isArray(screens) && screens.length > 0) {
+              const external = screens.find((s: any) => !s.isPrimary) || screens[0];
+              const left = external.availLeft ?? external.left ?? 0;
+              const top = external.availTop ?? external.top ?? 0;
+              const width = external.availWidth ?? external.width ?? 1280;
+              const height = external.availHeight ?? external.height ?? 720;
+              // move and resize (may be blocked by browser; wrap in try)
+              try { win?.moveTo(left, top); win?.resizeTo(width, height); } catch (err) { /* ignore */ }
+            }
+          }
+        } catch (err) {
+          // Feature not available or permission denied — ignore and fallback
+        }
+
+        // send an init soon after opening so display gets immediate snapshot
+        setTimeout(() => {
+          try { bcRef.current?.postMessage({ type: 'init', state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers } }); } catch (e) {}
+        }, 250);
+      } catch (e) {
+        // ignore
+      }
+    })();
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
   // processed events with cumulative totals for debug
   const processedEvents = useMemo(() => {
     let total = 0;
@@ -463,6 +568,10 @@ export const BasketballBoard: React.FC = () => {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                     <Move size={13} /> Open Tactical Page
                   </button>
+                  <button onClick={openDisplay}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <LayoutDashboard size={13} /> Display
+                  </button>
                 </div>
 
                 {/* Mobile actions: single menu button that expands into a vertical list */}
@@ -479,6 +588,7 @@ export const BasketballBoard: React.FC = () => {
                       <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
                       <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
                       <button onClick={() => window.open('/court', '_blank')} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
+                      <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
                     </div>
                   )}
                 </div>
@@ -1014,7 +1124,7 @@ const RosterPanel: React.FC<{
                 {teamScorers.length > 0 ? teamScorers.map(p => (
                   <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
-                      <InlineNumber num={p.number} onSave={(v) => {}} className="text-xs" compact />
+                      <InlineNumber num={p.number} onSave={() => {}} className="text-xs" compact />
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
