@@ -193,7 +193,7 @@ export const BasketballBoard: React.FC = () => {
 
   const isViewer = mode === 'viewer';
 
-  // ── 2. DERIVED VALUES (Safely placed at top to avoid Temporal Dead Zone errors) ── [1.2.6]
+  // ── 2. DERIVED VALUES (Safely placed at the top to resolve TDZ errors) ── [1.2.6]
   const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
   const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
@@ -279,6 +279,36 @@ export const BasketballBoard: React.FC = () => {
       supabase.removeChannel(channel);
     };
   }, [mode, isSyncEnabled]);
+
+  // ── GLOBAL TACTICAL COURT POINTER TRACKING ── [3]
+  // Actively tracks finger drag globally to prevent token stuttering on fast movements
+  useEffect(() => {
+    if (!courtDragId || isViewer) return;
+
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      const rect = courtRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
+      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
+
+      const upd = (prev: Player[]) => prev.map(p => p.id === courtDragId ? { ...p, x, y } : p);
+      setHomePlayers(upd);
+      setAwayPlayers(upd);
+    };
+
+    const handleGlobalPointerUp = () => {
+      setCourtDragId(null);
+    };
+
+    window.addEventListener('pointermove', handleGlobalPointerMove);
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+    };
+  }, [courtDragId, isViewer]);
 
   // Timer loop
   useEffect(() => {
@@ -469,32 +499,12 @@ export const BasketballBoard: React.FC = () => {
     setDraggedId(null);
   }, [draggedId, executeSubstitution, isViewer]);
 
-  // Tactical court drag (Clamps updated to 0-100% to allow fully dropping off-court bounds) [3]
-  const handleCourtPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>, id: string) => {
+  // Tactical court drag trigger
+  const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
     if (isViewer) return;
     e.preventDefault();
-    // Crucial fix: Lock the touch/mouse input to this specific circle so it never slips off! [2]
-    e.currentTarget.setPointerCapture(e.pointerId);
     setCourtDragId(id);
   }, [isViewer]);
-
-  const handleCourtPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!courtDragId || isViewer) return;
-    const rect = courtRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-    const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
-    const upd = (prev: Player[]) => prev.map(p => p.id === courtDragId ? { ...p, x, y } : p);
-    setHomePlayers(upd);
-    setAwayPlayers(upd);
-  }, [courtDragId, isViewer]);
-
-  const handleCourtPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch (err) {}
-    setCourtDragId(null);
-  }, []);
 
   const handleSetTime = useCallback(() => {
     if (isViewer) return;
@@ -530,7 +540,7 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
 
-  // ── 3. PROCESSED EVENTS (Added back to resolve compiler lookup error) ── [1.1.2]
+  // Processed events
   const processedEvents = useMemo(() => {
     let total = 0;
     return [...gameEvents]
@@ -913,7 +923,7 @@ export const BasketballBoard: React.FC = () => {
               )}
             </div>
 
-            {/* Events Log (Optional toggle - Restored so showEvents is cleanly used) [1.1.2] */}
+            {/* Events Log (Optional toggle) */}
             {showEvents && (
               <div className="rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-xl p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -925,7 +935,7 @@ export const BasketballBoard: React.FC = () => {
                   : <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                       {[...gameEvents].reverse().map(ev => (
                         <div key={ev.id} className="flex items-center gap-3 text-[11px] py-1 border-b border-slate-700/30">
-                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-950/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
+                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
                             {ev.team === 'home' ? 'HOME' : 'AWAY'}
                           </span>
                           <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
@@ -999,9 +1009,6 @@ export const BasketballBoard: React.FC = () => {
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
               <div className="w-full overflow-auto">{/* allows horizontal scroll on small screens */}
               <div ref={courtRef}
-                onPointerMove={handleCourtPointerMove}
-                onPointerUp={handleCourtPointerUp}
-                onPointerLeave={handleCourtPointerUp}
                 // Custom out-of-bounds padding allows tokens to drag past the lines [3]
                 className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10]"
               >
@@ -1030,8 +1037,7 @@ export const BasketballBoard: React.FC = () => {
                 {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
                   <div key={player.id}
                     onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                    onPointerUp={handleCourtPointerUp}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-grab active:cursor-grabbing ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                     style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
                     <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
                       player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
