@@ -204,54 +204,9 @@ export const BasketballBoard: React.FC = () => {
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // Scoresheet map (Declared before effects use them) [1.2.6]
-  const scoresheetMap = useMemo(() => {
-    const home: Record<number, { playerNumber: number; playerName: string }> = {};
-    const away: Record<number, { playerNumber: number; playerName: string }> = {};
-    let homeTotal = 0;
-    let awayTotal = 0;
-    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    for (const ev of events) {
-      if (!ev.value || ev.value <= 0) continue;
-      if (ev.team === 'home') {
-        homeTotal += ev.value;
-        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      } else {
-        awayTotal += ev.value;
-        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      }
-    }
-    return { home, away };
-  }, [gameEvents]);
-
-  const maxSheetRows = Math.max(homeScore, awayScore, 20);
-
-  // Sorted scorers lists (highest -> lowest), only players with points > 0
-  const homeScorers = useMemo(() =>
-    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [homePlayers]
-  );
-  const awayScorers = useMemo(() =>
-    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [awayPlayers]
-  );
-
-  // Processed events (Declared before JSX rendering use) [1.2.6]
-  const processedEvents = useMemo(() => {
-    let total = 0;
-    return [...gameEvents]
-      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-      .map(ev => {
-        if (ev.type === 'score' && ev.value && ev.value > 0) {
-          total += ev.value;
-          return { ...ev, cumulativeTotal: total };
-        }
-        return { ...ev, cumulativeTotal: total };
-      });
-  }, [gameEvents]);
-
-  // Refs for local popup sync
+  // Refs for local popup sync & Supabase channel references [2]
   const bcRef = useRef<BroadcastChannel | null>(null);
+  const syncChannelRef = useRef<any>(null);
 
   // ── LOCAL BROADCAST CHANNEL (Offline & Popup Window Sync) ── [2]
   useEffect(() => {
@@ -279,12 +234,47 @@ export const BasketballBoard: React.FC = () => {
     try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
 
-  // ── SUPABASE BROADCAST EFFECT (Controller -> Viewer) ── [2]
+  // ── 3. ESTABLISH A SINGLE STABLE BROADCAST CHANNEL WITH ACTIVE SUBSCRIPTION ── [2]
   useEffect(() => {
-    if (!supabase || mode !== 'controller' || !isSyncEnabled) return; // Respects manually disabled sync toggle [2]
+    if (!supabase || !isSyncEnabled) return;
 
-    const channel = supabase.channel('basketball-sync');
-    channel.send({
+    // Create a stable channel and subscribe to it permanently
+    const channel = supabase.channel('basketball-sync', {
+      config: { broadcast: { self: false } }
+    });
+
+    channel
+      .on('broadcast', { event: 'state-update' }, (response: any) => {
+        if (mode === 'viewer') {
+          const data = response.payload;
+          if (!data) return;
+          setHomePlayers(data.homePlayers);
+          setAwayPlayers(data.awayPlayers);
+          setGameTime(data.gameTime);
+          setShotClock(data.shotClock);
+          setIsRunning(data.isRunning);
+          setPeriod(data.period);
+          setGameEvents(data.gameEvents);
+          setView(data.view);
+          setClockMode(data.clockMode);
+        }
+      })
+      .subscribe();
+
+    syncChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      syncChannelRef.current = null;
+    };
+  }, [mode, isSyncEnabled]);
+
+  // ── 4. BROADCAST STATE CHANGES VIA THE STABLE CHANNEL (Controller Mode Only) ── [2]
+  useEffect(() => {
+    if (mode !== 'controller' || !syncChannelRef.current || !isSyncEnabled) return;
+
+    // Send update packages through the stable, pre-subscribed channel
+    syncChannelRef.current.send({
       type: 'broadcast',
       event: 'state-update',
       payload: {
@@ -300,36 +290,6 @@ export const BasketballBoard: React.FC = () => {
       }
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
-
-  // ── SUPABASE LISTEN EFFECT (Viewer Mode) ── [2]
-  useEffect(() => {
-    if (!supabase || !isSyncEnabled) return; // Respects manually disabled sync toggle [2]
-
-    const channel = supabase.channel('basketball-sync', {
-      config: { broadcast: { self: false } }
-    });
-
-    channel
-      .on('broadcast', { event: 'state-update' }, (response: any) => {
-        if (mode === 'viewer') {
-          const data = response.payload;
-          setHomePlayers(data.homePlayers);
-          setAwayPlayers(data.awayPlayers);
-          setGameTime(data.gameTime);
-          setShotClock(data.shotClock);
-          setIsRunning(data.isRunning);
-          setPeriod(data.period);
-          setGameEvents(data.gameEvents);
-          setView(data.view);
-          setClockMode(data.clockMode);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [mode, isSyncEnabled]);
 
   // ── GLOBAL TACTICAL COURT POINTER TRACKING ── [3]
   // Actively tracks finger drag globally to prevent token stuttering on fast movements
@@ -376,6 +336,38 @@ export const BasketballBoard: React.FC = () => {
     }, 1000);
     return () => clearInterval(t);
   }, [isRunning, clockMode]);
+
+  // Scoresheet map
+  const scoresheetMap = useMemo(() => {
+    const home: Record<number, { playerNumber: number; playerName: string }> = {};
+    const away: Record<number, { playerNumber: number; playerName: string }> = {};
+    let homeTotal = 0;
+    let awayTotal = 0;
+    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    for (const ev of events) {
+      if (!ev.value || ev.value <= 0) continue;
+      if (ev.team === 'home') {
+        homeTotal += ev.value;
+        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      } else {
+        awayTotal += ev.value;
+        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      }
+    }
+    return { home, away };
+  }, [gameEvents]);
+
+  const maxSheetRows = Math.max(homeScore, awayScore, 20);
+
+  // Sorted scorers lists (highest -> lowest), only players with points > 0
+  const homeScorers = useMemo(() =>
+    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [homePlayers]
+  );
+  const awayScorers = useMemo(() =>
+    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [awayPlayers]
+  );
 
   // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
@@ -555,6 +547,20 @@ export const BasketballBoard: React.FC = () => {
       // ignore
     }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
+
+  // Processed events
+  const processedEvents = useMemo(() => {
+    let total = 0;
+    return [...gameEvents]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      .map(ev => {
+        if (ev.type === 'score' && ev.value && ev.value > 0) {
+          total += ev.value;
+          return { ...ev, cumulativeTotal: total };
+        }
+        return { ...ev, cumulativeTotal: total };
+      });
+  }, [gameEvents]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
@@ -892,7 +898,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
                     <div className="flex flex-col gap-1">
                       {homeScorers.length > 0 ? homeScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-900/10 border border-orange-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-950/10 border border-orange-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-amber-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
@@ -1216,7 +1222,7 @@ const RosterPanel: React.FC<{
                   <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                 </div>
                 <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                  className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
+                  className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px]" />
                 <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
               </div>
             ))}
