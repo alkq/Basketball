@@ -246,7 +246,7 @@ export const BasketballBoard: React.FC = () => {
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
         if (mode === 'viewer') {
-          const data = response.payload;
+          const data = response; // FIXED: Supabase passes the raw payload directly as the parameter [1.2.7]
           if (!data) return;
           setHomePlayers(data.homePlayers);
           setAwayPlayers(data.awayPlayers);
@@ -1019,7 +1019,7 @@ export const BasketballBoard: React.FC = () => {
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
               <div className="w-full overflow-auto">{/* allows horizontal scroll on small screens */}
               <div ref={courtRef}
-                // Custom out-of-bounds padding allows tokens to drag past the lines (using touch-none for touchscreen safety) [3]
+                // Custom out-of-bounds padding allows tokens to drag past the lines [3]
                 className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10] touch-none"
               >
                 {/* Court Inset Boundary Lines (Outer box is inset by 8% to create off-court space) [3] */}
@@ -1222,7 +1222,7 @@ const RosterPanel: React.FC<{
                   <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                 </div>
                 <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                  className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px]" />
+                  className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
                 <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
               </div>
             ))}
