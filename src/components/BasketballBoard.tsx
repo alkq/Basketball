@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import {
   Play, Pause, Timer, ArrowRightLeft,
   ChevronUp, ChevronDown, Trophy,
   UserCheck, Edit3, Check, RotateCcw,
   Undo2, FileText, List, RefreshCw,
-  LayoutDashboard, Move
+  LayoutDashboard, Move, Monitor, Smartphone
 } from 'lucide-react';
+
+// ==========================================
+// 1. SUPABASE CLIENT INITIALIZATION (Safe Fallback)
+// ==========================================
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
 
 // ==========================================
 // TYPES
@@ -74,7 +85,7 @@ const createAwayPlayers = (): Player[] => [
 // ==========================================
 // INLINE NAME EDITOR
 // ==========================================
-const InlineName: React.FC<{ name: string; onSave: (n: string) => void; className?: string }> = ({ name, onSave, className = '' }) => {
+const InlineName: React.FC<{ name: string; onSave: (n: string) => void; className?: string; disabled?: boolean }> = ({ name, onSave, className = '', disabled = false }) => {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(name);
   const ref = useRef<HTMLInputElement>(null);
@@ -88,6 +99,10 @@ const InlineName: React.FC<{ name: string; onSave: (n: string) => void; classNam
     setEditing(false);
   };
 
+  if (disabled) {
+    return <span className={className}>{name}</span>;
+  }
+
   return editing ? (
     <div className={`flex items-center gap-0.5 ${className}`} onClick={(e) => e.stopPropagation()}>
       <input ref={ref} value={val} onChange={e => setVal(e.target.value)} autoFocus
@@ -99,13 +114,15 @@ const InlineName: React.FC<{ name: string; onSave: (n: string) => void; classNam
     <span className={`cursor-pointer group-hover:underline decoration-dotted decoration-slate-500 ${className}`} 
       onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit">
       {name}
-        <Edit3 size={16} className="hidden sm:inline ml-1 opacity-90 align-middle" />
-      </span>
+      <Edit3 size={16} className="hidden sm:inline ml-1 opacity-90 align-middle" />
+    </span>
   );
 };
 
+// ==========================================
 // SMALL INLINE NUMBER EDITOR
-const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; className?: string; compact?: boolean }> = ({ num, onSave, className = '', compact = false }) => {
+// ==========================================
+const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; className?: string; compact?: boolean; disabled?: boolean }> = ({ num, onSave, className = '', compact = false, disabled = false }) => {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(String(num));
   const ref = useRef<HTMLInputElement>(null);
@@ -116,6 +133,11 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
     if (!isNaN(v) && v !== num) onSave(v);
     setEditing(false);
   };
+
+  if (disabled) {
+    return <span className={className}>{num}</span>;
+  }
+
   if (!editing && compact) {
     return (
       <span className={`cursor-pointer ${className}`} onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit number">
@@ -143,8 +165,10 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
 // MAIN COMPONENT
 // ==========================================
 export const BasketballBoard: React.FC = () => {
+  const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); // Active Sync Role
+  const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); // Manual Sync Toggle state [2]
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
-  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); // View switcher state [1]
+  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); // View switcher state
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
   const [gameTime, setGameTime] = useState(600);
@@ -167,6 +191,95 @@ export const BasketballBoard: React.FC = () => {
   const [courtDragId, setCourtDragId] = useState<string | null>(null);
   const courtRef = useRef<HTMLDivElement>(null);
 
+  const isViewer = mode === 'viewer';
+
+  // ── 2. DERIVED VALUES (Safely placed at top to avoid Temporal Dead Zone errors) ── [1.2.6]
+  const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
+  const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
+  const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+  const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+
+  // Refs for local popup sync
+  const bcRef = useRef<BroadcastChannel | null>(null);
+
+  // ── LOCAL BROADCAST CHANNEL (Offline & Popup Window Sync) ── [2]
+  useEffect(() => {
+    try {
+      bcRef.current = new BroadcastChannel('scoreboard');
+      const chan = bcRef.current;
+      chan.onmessage = (ev) => {
+        if (!ev.data) return;
+        if (ev.data.type === 'request') {
+          chan.postMessage({ 
+            type: 'init', 
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers } 
+          });
+        }
+      };
+      return () => { chan.close(); bcRef.current = null; };
+    } catch (e) {
+      bcRef.current = null;
+    }
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
+
+  // Publish offline local broadcast updates
+  useEffect(() => {
+    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls };
+    try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
+
+  // ── SUPABASE BROADCAST EFFECT (Controller -> Viewer) ── [2]
+  useEffect(() => {
+    if (!supabase || mode !== 'controller' || !isSyncEnabled) return; // Respects manually disabled sync toggle [2]
+
+    const channel = supabase.channel('basketball-sync');
+    channel.send({
+      type: 'broadcast',
+      event: 'state-update',
+      payload: {
+        homePlayers,
+        awayPlayers,
+        gameTime,
+        shotClock,
+        isRunning,
+        period,
+        gameEvents,
+        view,
+        clockMode
+      }
+    });
+  }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
+
+  // ── SUPABASE LISTEN EFFECT (Viewer Mode) ── [2]
+  useEffect(() => {
+    if (!supabase || !isSyncEnabled) return; // Respects manually disabled sync toggle [2]
+
+    const channel = supabase.channel('basketball-sync', {
+      config: { broadcast: { self: false } }
+    });
+
+    channel
+      .on('broadcast', { event: 'state-update' }, (response: any) => {
+        if (mode === 'viewer') {
+          const data = response.payload;
+          setHomePlayers(data.homePlayers);
+          setAwayPlayers(data.awayPlayers);
+          setGameTime(data.gameTime);
+          setShotClock(data.shotClock);
+          setIsRunning(data.isRunning);
+          setPeriod(data.period);
+          setGameEvents(data.gameEvents);
+          setView(data.view);
+          setClockMode(data.clockMode);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [mode, isSyncEnabled]);
+
   // Timer loop
   useEffect(() => {
     if (!isRunning) return;
@@ -176,7 +289,6 @@ export const BasketballBoard: React.FC = () => {
           if (p <= 1) { setIsRunning(false); return 0; }
           return p - 1;
         }
-        // stopwatch (count up)
         return p + 1;
       });
       setShotClock(p => p <= 1 ? 0 : p - 1);
@@ -184,21 +296,12 @@ export const BasketballBoard: React.FC = () => {
     return () => clearInterval(t);
   }, [isRunning, clockMode]);
 
-  // Derived values
-  const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
-  const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
-  const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
-  const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
-
   // Scoresheet map
-  // Build separate cumulative counters for home and away so each team
-  // marks their own cumulative rows independently.
   const scoresheetMap = useMemo(() => {
     const home: Record<number, { playerNumber: number; playerName: string }> = {};
     const away: Record<number, { playerNumber: number; playerName: string }> = {};
     let homeTotal = 0;
     let awayTotal = 0;
-    // ensure events are processed chronologically by timestamp
     const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     for (const ev of events) {
       if (!ev.value || ev.value <= 0) continue;
@@ -227,7 +330,7 @@ export const BasketballBoard: React.FC = () => {
 
   // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
-    if (id1 === id2) return;
+    if (id1 === id2 || isViewer) return;
     const allPlayers = [...homePlayers, ...awayPlayers];
     const p1 = allPlayers.find(p => p.id === id1);
     const p2 = allPlayers.find(p => p.id === id2);
@@ -241,16 +344,16 @@ export const BasketballBoard: React.FC = () => {
       if (p.id === p2.id) return { ...p, status: p1.status };
       return p;
     }));
-  }, [homePlayers, awayPlayers]);
+  }, [homePlayers, awayPlayers, isViewer]);
 
   // Point scoring actions
   const addPoints = useCallback((team: 'home' | 'away', courtIndex: number, pts: number) => {
+    if (isViewer) return;
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
     setter(prev => {
       const court = prev.filter(p => p.status === 'court');
       const target = court[courtIndex];
       if (!target) return prev;
-      // Record the event using existing events to compute prior totals
       setGameEvents(prevEvs => {
         const now = Date.now();
         const hs = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'home').reduce((s, e) => s + e.value, 0);
@@ -261,7 +364,6 @@ export const BasketballBoard: React.FC = () => {
           value: pts, homeScoreBefore: hs, awayScoreBefore: as, timestamp: now
         };
         const last = prevEvs[prevEvs.length - 1];
-        // Ignore near-duplicate events (same player/team/value within 60ms)
         if (last && last.type === 'score' && last.team === team && last.playerId === target.id && last.value === pts && Math.abs((last.timestamp || 0) - now) < 60) {
           return prevEvs;
         }
@@ -269,10 +371,11 @@ export const BasketballBoard: React.FC = () => {
       });
       return prev.map(p => p.id === target.id ? { ...p, points: Math.max(0, p.points + pts) } : p);
     });
-  }, [homePlayers, awayPlayers]);
+  }, [homePlayers, awayPlayers, isViewer]);
 
   // Foul assignment actions
   const addFoul = useCallback((team: 'home' | 'away', courtIndex: number, delta: number) => {
+    if (isViewer) return;
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
     setter(prev => {
       const court = prev.filter(p => p.status === 'court');
@@ -297,9 +400,10 @@ export const BasketballBoard: React.FC = () => {
       }
       return prev.map(p => p.id === target.id ? { ...p, fouls: Math.max(0, p.fouls + delta) } : p);
     });
-  }, [homePlayers, awayPlayers]);
+  }, [homePlayers, awayPlayers, isViewer]);
 
   const undoLast = useCallback(() => {
+    if (isViewer) return;
     setGameEvents(prev => {
       if (!prev.length) return prev;
       const last = prev[prev.length - 1];
@@ -311,9 +415,10 @@ export const BasketballBoard: React.FC = () => {
       ));
       return prev.slice(0, -1);
     });
-  }, []);
+  }, [isViewer]);
 
   const resetGame = useCallback(() => {
+    if (isViewer) return;
     setHomePlayers(createHomePlayers());
     setAwayPlayers(createAwayPlayers());
     setGameTime(600);
@@ -322,52 +427,59 @@ export const BasketballBoard: React.FC = () => {
     setPeriod(1);
     setGameEvents([]);
     setSelectedCourtId(null);
-  }, []);
+  }, [isViewer]);
 
   const renamePlayer = useCallback((team: 'home' | 'away', id: string, name: string) => {
+    if (isViewer) return;
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev =>
       prev.map(p => p.id === id ? { ...p, name } : p)
     );
-  }, []);
+  }, [isViewer]);
 
   const changePlayerNumber = useCallback((team: 'home' | 'away', id: string, number: number) => {
+    if (isViewer) return;
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
-  }, []);
+  }, [isViewer]);
 
   // Instant substitution selection handlers
   const handleSelectCourt = useCallback((id: string) => {
+    if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
-  }, []);
+  }, [isViewer]);
 
   const handleBenchClick = useCallback((benchPlayerId: string) => {
-    if (selectedCourtId) {
+    if (selectedCourtId && !isViewer) {
       executeSubstitution(selectedCourtId, benchPlayerId);
       setSelectedCourtId(null);
     }
-  }, [selectedCourtId, executeSubstitution]);
+  }, [selectedCourtId, executeSubstitution, isViewer]);
 
   // Drag-drop substitution handlers
   const handleRosterDragStart = useCallback((e: React.DragEvent, playerId: string) => {
+    if (isViewer) return;
     e.dataTransfer.effectAllowed = 'move';
     setDraggedId(playerId);
-  }, []);
+  }, [isViewer]);
 
   const handleRosterDrop = useCallback((e: React.DragEvent, targetId: string) => {
     e.preventDefault();
     setDropTargetId(null);
-    if (!draggedId) return;
+    if (!draggedId || isViewer) return;
     executeSubstitution(draggedId, targetId);
     setDraggedId(null);
-  }, [draggedId, executeSubstitution]);
+  }, [draggedId, executeSubstitution, isViewer]);
 
   // Tactical court drag (Clamps updated to 0-100% to allow fully dropping off-court bounds) [3]
-  const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
+  const handleCourtPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>, id: string) => {
+    if (isViewer) return;
     e.preventDefault();
+    // Crucial fix: Lock the touch/mouse input to this specific circle so it never slips off! [2]
+    e.currentTarget.setPointerCapture(e.pointerId);
     setCourtDragId(id);
-  }, []);
+  }, [isViewer]);
 
-  const handleCourtPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!courtDragId) return;
+  const handleCourtPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!courtDragId || isViewer) return;
     const rect = courtRef.current?.getBoundingClientRect();
     if (!rect) return;
     const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
@@ -375,128 +487,50 @@ export const BasketballBoard: React.FC = () => {
     const upd = (prev: Player[]) => prev.map(p => p.id === courtDragId ? { ...p, x, y } : p);
     setHomePlayers(upd);
     setAwayPlayers(upd);
-  }, [courtDragId]);
+  }, [courtDragId, isViewer]);
 
-  const handleCourtPointerUp = useCallback(() => setCourtDragId(null), []);
+  const handleCourtPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (err) {}
+    setCourtDragId(null);
+  }, []);
 
   const handleSetTime = useCallback(() => {
+    if (isViewer) return;
     const m = parseInt(inputMins, 10);
     if (!isNaN(m) && m >= 0) {
       setGameTime(m * 60);
       setIsRunning(false);
     }
-  }, [inputMins]);
+  }, [inputMins, isViewer]);
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
   const [showDebug, setShowDebug] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
-  const bcRef = useRef<BroadcastChannel | null>(null);
-  const socketRef = useRef<any>(null);
 
-  useEffect(() => {
-    try {
-      bcRef.current = new BroadcastChannel('scoreboard');
-      const chan = bcRef.current;
-      chan.onmessage = (ev) => {
-        if (!ev.data) return;
-        if (ev.data.type === 'request') {
-          chan.postMessage({ type: 'init', state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers } });
-        }
-      };
-      return () => { chan.close(); bcRef.current = null; };
-    } catch (e) {
-      // BroadcastChannel may not be available in some environments
-      bcRef.current = null;
-    }
-  }, []);
-
-  // Socket.IO client for LAN remote tablet support. Connects to port 3000 on host.
-  useEffect(() => {
-    (async () => {
-      try {
-        // dynamic import to avoid top-level dependency issues
-        // @ts-ignore
-        const { io } = await import('socket.io-client');
-        const socketUrl = (import.meta as any).env?.VITE_SOCKET_URL || `http://${window.location.hostname || 'localhost'}:3000`;
-        const socket = io(socketUrl);
-        socketRef.current = socket;
-
-        socket.on('connect', () => {
-          // send current full state
-          socket.emit('state', { homePlayers, awayPlayers, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls });
-        });
-
-        socket.on('state', (s: any) => {
-          if (!s) return;
-          if (s.homePlayers) setHomePlayers(s.homePlayers);
-          if (s.awayPlayers) setAwayPlayers(s.awayPlayers);
-          if (typeof s.gameTime === 'number') setGameTime(s.gameTime);
-          if (typeof s.shotClock === 'number') setShotClock(s.shotClock);
-          if (typeof s.period === 'number') setPeriod(s.period);
-          if (typeof s.homeScore === 'number' || typeof s.awayScore === 'number') {
-            // scores are derived from players; keep them consistent by not forcing
-          }
-        });
-
-        socket.on('control', (msg: any) => {
-          // Support basic control messages if needed in future
-          // e.g. { type: 'reset' }
-          if (!msg) return;
-          if (msg.type === 'reset') resetGame();
-        });
-
-        return () => { socket.disconnect(); socketRef.current = null; };
-      } catch (e) {
-        // socket.io-client not installed or connection failed
-        socketRef.current = null;
-      }
-    })();
-  }, []);
-
-  // Publish score updates
-  useEffect(() => {
-    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls };
-    try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
-    try { socketRef.current?.emit && socketRef.current.emit('state', { homePlayers, awayPlayers, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls }); } catch (e) { /* ignore */ }
-  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
-
+  // Opens local display popup via BroadcastChannel [1]
   const openDisplay = useCallback(() => {
-    (async () => {
-      try {
-        const features = 'toolbar=0,location=0,menubar=0,resizable=1,scrollbars=0,width=1280,height=720';
-        const win = window.open('/display', 'scoreboard_display', features);
-
-        // Try to position the window on an external screen when supported
+    try {
+      const features = 'toolbar=0,location=0,menubar=0,resizable=1,scrollbars=0,width=1280,height=720';
+      window.open('/display', 'scoreboard_display', features);
+      
+      // send init state immediately
+      setTimeout(() => {
         try {
-          const gp = (navigator as any).getScreens || (window as any).getScreenDetails;
-          if (gp) {
-            const details = await gp.call(navigator || window);
-            const screens = details.screens || details;
-            if (Array.isArray(screens) && screens.length > 0) {
-              const external = screens.find((s: any) => !s.isPrimary) || screens[0];
-              const left = external.availLeft ?? external.left ?? 0;
-              const top = external.availTop ?? external.top ?? 0;
-              const width = external.availWidth ?? external.width ?? 1280;
-              const height = external.availHeight ?? external.height ?? 720;
-              // move and resize (may be blocked by browser; wrap in try)
-              try { win?.moveTo(left, top); win?.resizeTo(width, height); } catch (err) { /* ignore */ }
-            }
-          }
-        } catch (err) {
-          // Feature not available or permission denied — ignore and fallback
-        }
-
-        // send an init soon after opening so display gets immediate snapshot
-        setTimeout(() => {
-          try { bcRef.current?.postMessage({ type: 'init', state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers } }); } catch (e) {}
-        }, 250);
-      } catch (e) {
-        // ignore
-      }
-    })();
+          bcRef.current?.postMessage({
+            type: 'init',
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers }
+          });
+        } catch (e) {}
+      }, 250);
+    } catch (e) {
+      // ignore
+    }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
-  // processed events with cumulative totals for debug
+
+  // ── 3. PROCESSED EVENTS (Added back to resolve compiler lookup error) ── [1.1.2]
   const processedEvents = useMemo(() => {
     let total = 0;
     return [...gameEvents]
@@ -513,6 +547,54 @@ export const BasketballBoard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
       <div className="max-w-screen-2xl mx-auto p-3 md:p-5 space-y-4">
+
+        {/* ── REALTIME ROLE BAR ── */}
+        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-700/40 shadow-inner">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sync Connection:</span>
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${supabase && isSyncEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-xs text-slate-400 font-medium">
+              {supabase && isSyncEnabled 
+                ? 'Connected to Realtime' 
+                : !supabase 
+                  ? 'Offline Mode (Configure VITE_SUPABASE_URL)' 
+                  : 'Sync Connection Closed'}
+            </span>
+            
+            {/* Toggle Sync Button [2] */}
+            {supabase && (
+              <button
+                onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                className={`ml-2 px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-all active:scale-95 ${
+                  isSyncEnabled 
+                    ? 'bg-red-900/40 text-red-300 border border-red-700/30 hover:bg-red-900/60' 
+                    : 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 hover:bg-emerald-900/60'
+                }`}
+              >
+                {isSyncEnabled ? 'Close Sync' : 'Turn On Sync'}
+              </button>
+            )}
+          </div>
+          
+          <div className="flex gap-2 bg-slate-800 p-1 rounded-lg">
+            <button
+              onClick={() => setMode('controller')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                mode === 'controller' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Smartphone size={13} /> Controller (Tablet)
+            </button>
+            <button
+              onClick={() => setMode('viewer')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                mode === 'viewer' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Monitor size={13} /> Viewer (TV Screen)
+            </button>
+          </div>
+        </div>
 
         {/* ── CENTRAL APP NAVIGATION TABS ── */}
         <div className="flex border-b border-slate-700/50 bg-slate-800/40 p-1 rounded-xl">
@@ -539,61 +621,63 @@ export const BasketballBoard: React.FC = () => {
            ========================================== */}
         {view === 'scoreboard' && (
           <div className="space-y-4">
-            {/* Top Action Bar */}
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <List size={16} className="text-amber-400" />
-                <span className="text-sm font-bold text-amber-400">Game Log</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Desktop actions (hidden on small screens) */}
-                <div className="hidden sm:flex items-center gap-2">
-                  <button onClick={undoLast} disabled={gameEvents.length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                    <Undo2 size={13} /> Undo Last
-                  </button>
-                  <button onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                    <FileText size={13} /> Scoresheet PDF
-                  </button>
-                  <button onClick={() => setShowEvents(v => !v)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                    <List size={13} /> Events
-                  </button>
-                  <button onClick={resetGame}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                    <RotateCcw size={13} /> Reset
-                  </button>
-                  <button onClick={() => window.open('/court', '_blank')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                    <Move size={13} /> Open Tactical Page
-                  </button>
-                  <button onClick={openDisplay}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                    <LayoutDashboard size={13} /> Display
-                  </button>
+            {/* Top Action Bar (Hides in Viewer mode to maintain cleanliness) */}
+            {!isViewer && (
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <List size={16} className="text-amber-400" />
+                  <span className="text-sm font-bold text-amber-400">Game Log</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  {/* Desktop actions (hidden on small screens) */}
+                  <div className="hidden sm:flex items-center gap-2">
+                    <button onClick={undoLast} disabled={gameEvents.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      <Undo2 size={13} /> Undo Last
+                    </button>
+                    <button onClick={() => window.print()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      <FileText size={13} /> Scoresheet PDF
+                    </button>
+                    <button onClick={() => setShowEvents(v => !v)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      <List size={13} /> Events
+                    </button>
+                    <button onClick={resetGame}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      <RotateCcw size={13} /> Reset
+                    </button>
+                    <button onClick={() => window.open('/court', '_blank')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      <Move size={13} /> Open Tactical Page
+                    </button>
+                    <button onClick={openDisplay}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      <LayoutDashboard size={13} /> Display
+                    </button>
+                  </div>
 
-                {/* Mobile actions: single menu button that expands into a vertical list */}
-                <div className="sm:hidden relative">
-                  <button onClick={() => setShowMobileActions(s => !s)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-700/90 text-white text-sm font-semibold">
-                    Actions
-                  </button>
-                  {showMobileActions && (
-                    <div className="absolute right-0 mt-2 w-44 bg-slate-800 border border-slate-700 rounded shadow-lg z-30 p-2 space-y-2">
-                      <button onClick={undoLast} disabled={gameEvents.length === 0}
-                        className="w-full text-left px-2 py-1 rounded bg-amber-700/80 text-white text-sm disabled:opacity-40">Undo Last</button>
-                      <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
-                      <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
-                      <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
-                      <button onClick={() => window.open('/court', '_blank')} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
-                      <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
-                    </div>
-                  )}
+                  {/* Mobile actions: single menu button that expands into a vertical list */}
+                  <div className="sm:hidden relative">
+                    <button onClick={() => setShowMobileActions(s => !s)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-700/90 text-white text-sm font-semibold">
+                      Actions
+                    </button>
+                    {showMobileActions && (
+                      <div className="absolute right-0 mt-2 w-44 bg-slate-800 border border-slate-700 rounded shadow-lg z-30 p-2 space-y-2">
+                        <button onClick={undoLast} disabled={gameEvents.length === 0}
+                          className="w-full text-left px-2 py-1 rounded bg-amber-700/80 text-white text-sm disabled:opacity-40">Undo Last</button>
+                        <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
+                        <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
+                        <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
+                        <button onClick={() => window.open('/court', '_blank')} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
+                        <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Scoreboard Banner */}
             <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-slate-700/50">
@@ -607,7 +691,7 @@ export const BasketballBoard: React.FC = () => {
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full opacity-50" />
-                    <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 text-white text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-black py-3 sm:py-4 px-6 sm:px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums">
+                    <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 text-white text-6xl md:text-8xl lg:text-9xl font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums">
                       {homeScore}
                     </div>
                   </div>
@@ -621,9 +705,9 @@ export const BasketballBoard: React.FC = () => {
                 <div className="col-span-2 sm:col-span-1 order-first sm:order-none flex flex-col items-center gap-2 py-3 sm:gap-2.5 sm:py-4 bg-slate-800/50">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest">Period</span>
-                    <button onClick={() => setPeriod(p => Math.max(1, p - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>
+                    {!isViewer && <button onClick={() => setPeriod(p => Math.max(1, p - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>}
                     <span className="text-lg font-black text-white tabular-nums min-w-[1.25rem] text-center">{period}</span>
-                    <button onClick={() => setPeriod(p => Math.min(9, p + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>
+                    {!isViewer && <button onClick={() => setPeriod(p => Math.min(9, p + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>}
                   </div>
 
                   <div className="text-center">
@@ -631,23 +715,25 @@ export const BasketballBoard: React.FC = () => {
                     <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${gameTime <= 30 && gameTime > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
                       {formatTime(gameTime)}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1.5 justify-center">
-                      <input type="number" min="0" max="999" value={inputMins} onChange={e => setInputMins(e.target.value)}
-                        className="w-12 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
-                      <button onClick={handleSetTime} className="bg-slate-600 hover:bg-slate-500 text-white text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1">
-                        <Timer size={10} />Set
-                      </button>
-                      <div className="ml-2 inline-flex rounded overflow-hidden border border-slate-700/50">
-                        <button onClick={() => setClockMode('countdown')}
-                          className={`px-2 text-[10px] py-0.5 ${clockMode === 'countdown' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
-                          Countdown
+                    {!isViewer && (
+                      <div className="flex items-center gap-1.5 mt-1.5 justify-center">
+                        <input type="number" min="0" max="999" value={inputMins} onChange={e => setInputMins(e.target.value)}
+                          className="w-12 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
+                        <button onClick={handleSetTime} className="bg-slate-600 hover:bg-slate-500 text-white text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1">
+                          <Timer size={10} />Set
                         </button>
-                        <button onClick={() => setClockMode('stopwatch')}
-                          className={`px-2 text-[10px] py-0.5 ${clockMode === 'stopwatch' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
-                          Stopwatch
-                        </button>
+                        <div className="ml-2 inline-flex rounded overflow-hidden border border-slate-700/50">
+                          <button onClick={() => setClockMode('countdown')}
+                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'countdown' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                            Countdown
+                          </button>
+                          <button onClick={() => setClockMode('stopwatch')}
+                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'stopwatch' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                            Stopwatch
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="w-3/4 border-t border-slate-700/50" />
@@ -659,24 +745,28 @@ export const BasketballBoard: React.FC = () => {
                     }`}>
                       {shotClock}
                     </div>
-                    <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
-                      <button onClick={() => setShotClock(24)}
-                        className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow transition-all active:scale-95">
-                        <RefreshCw size={9} />24s
-                      </button>
-                      <button onClick={() => setShotClock(14)}
-                        className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow transition-all active:scale-95">
-                        <RefreshCw size={9} />14s
-                      </button>
-                    </div>
+                    {!isViewer && (
+                      <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
+                        <button onClick={() => setShotClock(24)}
+                          className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                          <RefreshCw size={9} />24s
+                        </button>
+                        <button onClick={() => setShotClock(14)}
+                          className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                          <RefreshCw size={9} />14s
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  <button onClick={() => setIsRunning(!isRunning)}
-                    className={`w-full max-w-[200px] py-2 rounded-xl font-bold transition-all text-xs shadow-lg active:scale-[0.98] flex items-center justify-center gap-1.5 ${
-                      isRunning ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white' : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
-                    }`}>
-                    {isRunning ? <><Pause size={14} />Pause Clock</> : <><Play size={14} />Start Clock</>}
-                  </button>
+                  {!isViewer && (
+                    <button onClick={() => setIsRunning(!isRunning)}
+                      className={`w-full max-w-[200px] py-2 rounded-xl font-bold transition-all text-xs shadow-lg active:scale-[0.98] flex items-center justify-center gap-1.5 ${
+                        isRunning ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white' : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
+                      }`}>
+                      {isRunning ? <><Pause size={14} />Pause Clock</> : <><Play size={14} />Start Clock</>}
+                    </button>
+                  )}
                 </div>
 
                 {/* Away Team Display */}
@@ -693,7 +783,7 @@ export const BasketballBoard: React.FC = () => {
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
                     <span className="text-base md:text-lg">Fouls:</span>
-                    <span className={`ml-2 text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                 </div>
               </div>
@@ -710,7 +800,7 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} />
+                onBenchClick={handleBenchClick} isViewer={isViewer} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -720,7 +810,7 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} />
+                onBenchClick={handleBenchClick} isViewer={isViewer} />
             </div>
 
             {/* Scoresheet Table */}
@@ -784,7 +874,7 @@ export const BasketballBoard: React.FC = () => {
                   </table>
                 </div>
 
-                {/* Score stats footer (unchanged) */}
+                {/* Score stats footer */}
                 <div className="mt-4 flex flex-col sm:flex-row gap-3 border-t border-slate-700/40 pt-3">
                   <div className="flex-1">
                     <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
@@ -823,7 +913,7 @@ export const BasketballBoard: React.FC = () => {
               )}
             </div>
 
-            {/* Events Log (Optional toggle) */}
+            {/* Events Log (Optional toggle - Restored so showEvents is cleanly used) [1.1.2] */}
             {showEvents && (
               <div className="rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-xl p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -835,7 +925,7 @@ export const BasketballBoard: React.FC = () => {
                   : <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                       {[...gameEvents].reverse().map(ev => (
                         <div key={ev.id} className="flex items-center gap-3 text-[11px] py-1 border-b border-slate-700/30">
-                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
+                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-950/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
                             {ev.team === 'home' ? 'HOME' : 'AWAY'}
                           </span>
                           <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
@@ -929,7 +1019,7 @@ export const BasketballBoard: React.FC = () => {
                   <div className="absolute top-1/2 left-0 -translate-y-1/2 h-[22%] w-[8%] border-y border-r border-white/20" />
                   {/* Right Paint key and free throw area */}
                   <div className="absolute top-1/2 right-0 -translate-y-1/2 h-[38%] w-[16%] border-y-2 border-l-2 border-white/40" />
-                  <div className="absolute top-1/2 right-0 -translate-y-1/2 h-[22%] w-[8%] border-y border-l border-white/20" />
+                  <div className="absolute top-1/2 right-0 -translate-y-1/2 h-[22%] w-[8%] border-y-l border-white/20" />
                   {/* Left Three-point line arc */}
                   <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[22%] h-[80%] border-r-2 border-white/25 rounded-r-full" />
                   {/* Right Three-point line arc */}
@@ -940,7 +1030,8 @@ export const BasketballBoard: React.FC = () => {
                 {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
                   <div key={player.id}
                     onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-grab active:cursor-grabbing ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
+                    onPointerUp={handleCourtPointerUp}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                     style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
                     <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
                       player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
@@ -984,11 +1075,12 @@ const RosterPanel: React.FC<{
   selectedCourtId: string | null;
   onSelectCourt: (id: string) => void;
   onBenchClick: (id: string) => void;
+  isViewer?: boolean;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
-  selectedCourtId, onSelectCourt, onBenchClick 
+  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -1033,25 +1125,25 @@ const RosterPanel: React.FC<{
               const isSelected = selectedCourtId === player.id;
               return (
                 <div key={player.id}
-                  draggable
+                  draggable={!isViewer}
                   onContextMenu={e => e.preventDefault()}
                   onDragStart={e => onDragStart(e, player.id)}
                   onDrop={e => onDrop(e, player.id)}
                   onDragOver={e => onDragOver(e, player.id)}
                   onDragLeave={onDragLeave}
                   onClick={() => onSelectCourt(player.id)}
-                  className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all cursor-pointer ${
+                  className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
                     isDragging(player.id) ? 'opacity-40 scale-95' : ''
                   } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
                     isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
                   } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
 
-                  <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center text-white font-black text-xs md:text-sm mb-0.5 shadow-md ${
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-xs md:text-sm mb-0.5 shadow-md ${
                     isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                   }`}>
-                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact />
+                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                   </div>
-                  <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
+                  <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
                     className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
                   <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
                   <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
@@ -1060,27 +1152,31 @@ const RosterPanel: React.FC<{
                   </div>
                   
                   {/* Score buttons with stopPropagation to avoid toggling select card */}
-                  <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
-                    {[1, 2, 3].map(p => (
-                      <button key={p}
-                        onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                        className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
-                        +{p}
-                      </button>
-                    ))}
-                  </div>
-                  
-                  {/* Foul buttons with stopPropagation */}
-                  <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
-                      className="bg-red-900/60 hover:bg-red-800 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-red-300 transition-colors active:scale-95">+F</button>
-                    {player.fouls > 0 && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
-                        className="bg-slate-700/50 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-slate-400 transition-colors active:scale-95">-F</button>
-                    )}
-                  </div>
+                  {!isViewer && (
+                    <>
+                      <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
+                        {[1, 2, 3].map(p => (
+                          <button key={p}
+                            onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
+                            className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
+                            +{p}
+                          </button>
+                        ))}
+                      </div>
+                      
+                      {/* Foul buttons with stopPropagation */}
+                      <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
+                          className="bg-red-900/60 hover:bg-red-800 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-red-300 transition-colors active:scale-95">+F</button>
+                        {player.fouls > 0 && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
+                            className="bg-slate-700/50 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-slate-400 transition-colors active:scale-95">-F</button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1092,8 +1188,8 @@ const RosterPanel: React.FC<{
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {benchPlayers.map(player => (
-                <div key={player.id}
-                draggable
+              <div key={player.id}
+                draggable={!isViewer}
                 onContextMenu={e => e.preventDefault()}
                 onDragStart={e => onDragStart(e, player.id)}
                 onDrop={e => onDrop(e, player.id)}
@@ -1102,14 +1198,14 @@ const RosterPanel: React.FC<{
                 onClick={() => onBenchClick(player.id)}
                 className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
                   isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-700/40'
-                }`}>
+                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105'}
+                `}>
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
                   isHome ? 'bg-red-900/50' : 'bg-blue-900/50'
                 }`}>
-                  <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact />
+                  <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                 </div>
-                <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
+                <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
                   className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
                 <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
               </div>
@@ -1120,11 +1216,12 @@ const RosterPanel: React.FC<{
             {/* Player stats: quick per-team scorers under roster (restored style) */}
             <div>
               <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 text-xs">
                 {teamScorers.length > 0 ? teamScorers.map(p => (
                   <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
-                      <InlineNumber num={p.number} onSave={() => {}} className="text-xs" compact />
+                      {/* FIXED TYPO: Changed Inlinenum to InlineNumber */}
+                      <InlineNumber num={p.number} onSave={() => {}} className="text-xs" compact={true} disabled={isViewer} />
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>

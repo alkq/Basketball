@@ -1,4 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// ==========================================
+// 1. SUPABASE CLIENT INITIALIZATION (Safe Fallback)
+// ==========================================
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
 
 type DisplayState = {
   homeScore: number;
@@ -10,56 +21,58 @@ type DisplayState = {
   awayFouls: number;
 };
 
-const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+const formatTime = (s: number) => 
+  `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
 const DisplayBoard: React.FC = () => {
-  const [state, setState] = useState<DisplayState>({ homeScore: 0, awayScore: 0, period: 1, gameTime: 600, shotClock: 24, homeFouls: 0, awayFouls: 0 });
+  const [state, setState] = useState<DisplayState>({ 
+    homeScore: 0, 
+    awayScore: 0, 
+    period: 1, 
+    gameTime: 600, 
+    shotClock: 24, 
+    homeFouls: 0, 
+    awayFouls: 0 
+  });
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // ── REALTIME STATE RECEIVER (Listens to Tablet Controller over Internet) ── [2]
   useEffect(() => {
-    const channel = new BroadcastChannel('scoreboard');
-    channel.onmessage = (ev) => {
-      if (!ev.data) return;
-      if (ev.data.type === 'update' || ev.data.type === 'init') {
-        setState(prev => ({ ...prev, ...ev.data.state }));
-      }
+    if (!supabase) return;
+
+    const channel = supabase.channel('basketball-sync', {
+      config: { broadcast: { self: false } }
+    });
+
+    channel
+      .on('broadcast', { event: 'state-update' }, (response: any) => {
+        const s = response.payload;
+        if (!s) return;
+
+        // Calculate home/away scores and fouls dynamically from the synced player data
+        const hs = s.homePlayers ? s.homePlayers.reduce((sum: number, p: any) => sum + p.points, 0) : 0;
+        const as = s.awayPlayers ? s.awayPlayers.reduce((sum: number, p: any) => sum + p.points, 0) : 0;
+        const hFouls = s.homePlayers ? s.homePlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : 0;
+        const aFouls = s.awayPlayers ? s.awayPlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : 0;
+
+        setState({
+          homeScore: hs,
+          awayScore: as,
+          period: s.period ?? 1,
+          gameTime: s.gameTime ?? 600,
+          shotClock: s.shotClock ?? 24,
+          homeFouls: hFouls,
+          awayFouls: aFouls
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-    // Ask for initial state when the display connects
-    channel.postMessage({ type: 'request' });
-    return () => channel.close();
   }, []);
 
-  // Also try Socket.IO LAN connection if available
-  useEffect(() => {
-    (async () => {
-      try {
-        // @ts-ignore
-        const { io } = await import('socket.io-client');
-        const socketUrl = (import.meta as any).env?.VITE_SOCKET_URL || `http://${window.location.hostname || 'localhost'}:3000`;
-        const socket = io(socketUrl);
-        socket.on('connect', () => {
-          // request last state by listening to 'state' event
-        });
-        socket.on('state', (s: any) => {
-          if (!s) return;
-          setState(prev => ({
-            ...prev,
-            homeScore: s.homeScore ?? prev.homeScore,
-            awayScore: s.awayScore ?? prev.awayScore,
-            period: s.period ?? prev.period,
-            gameTime: s.gameTime ?? prev.gameTime,
-            shotClock: s.shotClock ?? prev.shotClock,
-            homeFouls: s.homeFouls ?? prev.homeFouls,
-            awayFouls: s.awayFouls ?? prev.awayFouls,
-          }));
-        });
-        return () => socket.disconnect();
-      } catch (e) {
-        // ignore if socket.io-client unavailable
-      }
-    })();
-  }, []);
-
+  // Fullscreen event listener
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     window.addEventListener('fullscreenchange', onFsChange);
@@ -76,32 +89,101 @@ const DisplayBoard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
-      <div className="w-full max-w-6xl grid grid-cols-3 gap-6 items-center">
-        <div className="flex flex-col items-center justify-center">
-          <div className="text-amber-400 uppercase text-xl font-bold mb-3">Home</div>
-          <div className="bg-gradient-to-br from-orange-600 to-orange-800 text-white text-8xl md:text-9xl font-black py-6 px-8 rounded-xl shadow-lg tabular-nums">{state.homeScore}</div>
-          <div className="mt-4 text-2xl text-amber-300">Fouls: <span className="font-bold">{state.homeFouls}</span></div>
-        </div>
-
-        <div className="flex flex-col items-center justify-center">
-          <div className="text-slate-400 uppercase text-sm">Period</div>
-          <div className="text-6xl md:text-7xl font-black text-white my-2">{state.period}</div>
-          <div className="text-slate-400 uppercase text-sm">Game Clock</div>
-          <div className="text-5xl md:text-6xl font-mono font-black text-emerald-400 my-2">{formatTime(state.gameTime)}</div>
-          <div className="text-slate-400 uppercase text-sm mt-2">Shot Clock</div>
-          <div className="text-4xl md:text-5xl font-mono font-black text-rose-400 mt-1">{state.shotClock}</div>
-        </div>
-
-        <div className="flex flex-col items-center justify-center">
-          <div className="text-sky-400 uppercase text-xl font-bold mb-3">Away</div>
-          <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white text-8xl md:text-9xl font-black py-6 px-8 rounded-xl shadow-lg tabular-nums">{state.awayScore}</div>
-          <div className="mt-4 text-2xl text-sky-300">Fouls: <span className="font-bold">{state.awayFouls}</span></div>
-        </div>
+    <div className="min-h-screen bg-black text-white flex flex-col justify-center items-center p-6 md:p-12 select-none overflow-hidden">
+      
+      {/* Sync Status bar (mini & clean at the top) */}
+      <div className="absolute top-4 flex items-center gap-2 text-slate-600 text-[10px] tracking-wider uppercase">
+        <span className={`w-1.5 h-1.5 rounded-full ${supabase ? 'bg-emerald-500/60' : 'bg-red-500/60'}`} />
+        <span>{supabase ? 'Vercel Realtime Active' : 'Offline Mode'}</span>
       </div>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2">
+
+      <div className="w-full max-w-[95vw] h-[85vh] grid grid-cols-3 gap-8 md:gap-12 lg:gap-16 items-center">
+        
+        {/* HOME TEAM COLUMN */}
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <div className="text-orange-400 uppercase text-2xl md:text-4xl lg:text-5xl font-black tracking-widest text-center">
+            Home
+          </div>
+          <div className="relative">
+            {/* LED Ambient Glow */}
+            <div className="absolute inset-0 bg-orange-600/10 blur-3xl rounded-full scale-110" />
+            <div className="relative bg-gradient-to-br from-orange-600 to-orange-800 text-white text-8xl sm:text-9xl md:text-[12rem] lg:text-[14rem] xl:text-[18rem] font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums border border-orange-500/20 drop-shadow-[0_0_30px_rgba(249,115,22,0.3)]">
+              {state.homeScore}
+            </div>
+          </div>
+          <div className="text-xl md:text-3xl lg:text-4xl text-orange-300 font-bold tracking-wide uppercase pt-2">
+            Fouls: <span className="text-white font-extrabold text-2xl md:text-4xl lg:text-5xl ml-1">{state.homeFouls}</span>
+          </div>
+        </div>
+
+        {/* CLOCK & PERIOD CENTRAL COLUMN */}
+        <div className="flex flex-col items-center justify-center space-y-8 md:space-y-12">
+          
+          {/* Period */}
+          <div className="flex flex-col items-center justify-center">
+            <span className="text-slate-500 text-xs md:text-lg font-bold uppercase tracking-widest">Period</span>
+            <div className="text-6xl md:text-8xl lg:text-[8rem] font-black text-white leading-none mt-1 select-none">
+              {state.period}
+            </div>
+          </div>
+
+          <div className="w-full border-t border-slate-800/80 my-2" />
+
+          {/* Game Clock */}
+          <div className="text-center">
+            <span className="text-slate-500 text-xs md:text-lg font-bold uppercase tracking-widest block mb-1">Game Clock</span>
+            <div className="relative">
+              <div className="absolute inset-0 bg-emerald-500/5 blur-xl rounded-full scale-105" />
+              <div className="relative text-5xl sm:text-6xl md:text-8xl lg:text-[9rem] font-mono font-black text-emerald-400 select-none leading-none tracking-tight drop-shadow-[0_0_20px_rgba(52,211,153,0.3)]">
+                {formatTime(state.gameTime)}
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full border-t border-slate-800/80 my-2" />
+
+          {/* Shot Clock */}
+          <div className="text-center">
+            <span className="text-slate-500 text-xs md:text-lg font-bold uppercase tracking-widest block mb-1">Shot Clock</span>
+            <div className="relative">
+              <div className="absolute inset-0 bg-rose-500/5 blur-xl rounded-full scale-105" />
+              <div className={`relative text-4xl sm:text-5xl md:text-7xl lg:text-[8rem] font-mono font-black select-none leading-none drop-shadow-[0_0_20px_rgba(244,63,94,0.3)] ${
+                state.shotClock <= 5 ? 'text-red-500 animate-pulse' : 'text-rose-400'
+              }`}>
+                {state.shotClock}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* AWAY TEAM COLUMN */}
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <div className="text-sky-400 uppercase text-2xl md:text-4xl lg:text-5xl font-black tracking-widest text-center">
+            Away
+          </div>
+          <div className="relative">
+            {/* LED Ambient Glow */}
+            <div className="absolute inset-0 bg-blue-600/10 blur-3xl rounded-full scale-110" />
+            <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 text-white text-8xl sm:text-9xl md:text-[12rem] lg:text-[14rem] xl:text-[18rem] font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums border border-blue-500/20 drop-shadow-[0_0_30px_rgba(37,99,235,0.3)]">
+              {state.awayScore}
+            </div>
+          </div>
+          <div className="text-xl md:text-3xl lg:text-4xl text-sky-300 font-bold tracking-wide uppercase pt-2">
+            Fouls: <span className="text-white font-extrabold text-2xl md:text-4xl lg:text-5xl ml-1">{state.awayFouls}</span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Floating Fullscreen Activator */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30">
         {!isFullscreen && (
-          <button onClick={goFullscreen} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-full font-bold shadow-lg">Go Fullscreen</button>
+          <button 
+            onClick={goFullscreen} 
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3.5 rounded-full font-bold shadow-2xl hover:scale-105 active:scale-95 transition-all text-sm tracking-wider uppercase"
+          >
+            Go Fullscreen
+          </button>
         )}
       </div>
     </div>
