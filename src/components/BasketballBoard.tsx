@@ -58,7 +58,7 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 const uid = () => Math.random().toString(36).slice(2);
 
 const createHomePlayers = (): Player[] => [
-  { id: 'h1', name: 'Kwong', number: 1, points: 0, fouls: 0, status: 'court', team: 'home', x: 35, y: 50 },
+  { id: 'h1', name: 'Kwong', number: 1, points: 0, fouls: 0, status: 'court', team: 'home', x: 35, y: 45 },
   { id: 'h2', name: 'Hua',   number: 2, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 22 },
   { id: 'h3', name: 'Vis',   number: 3, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 78 },
   { id: 'h4', name: 'Nan',   number: 4, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 30 },
@@ -71,7 +71,7 @@ const createHomePlayers = (): Player[] => [
 ];
 
 const createAwayPlayers = (): Player[] => [
-  { id: 'a1', name: 'Fu',      number: 1, points: 0, fouls: 0, status: 'court', team: 'away', x: 65, y: 50 },
+  { id: 'a1', name: 'Fu',      number: 1, points: 0, fouls: 0, status: 'court', team: 'away', x: 65, y: 45 },
   { id: 'a2', name: 'Ci',      number: 2, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 22 },
   { id: 'a3', name: 'Sheng',   number: 3, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 78 },
   { id: 'a4', name: 'Ping',    number: 4, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 30 },
@@ -999,7 +999,7 @@ export const BasketballBoard: React.FC = () => {
         )}
 
         {/* ==========================================
-            VIEW 2: FULL TACTICAL COURT (HORIZONTAL TO MATCH SPECIFICATION)
+            VIEW 2: FULL TACTICAL COURT (HORIZONTAL CONFIGURATION)
            ========================================== */}
         {view === 'court' && (
           <div className="space-y-4">
@@ -1021,7 +1021,7 @@ export const BasketballBoard: React.FC = () => {
                 <div className="flex items-center gap-3 text-xs">
                   <span className="text-slate-500">Period: <b className="text-slate-300 font-bold">{period}</b></span>
                   <span className="text-slate-500">|</span>
-                  <span className={`font-mono font-bold ${shotUrgent ? 'text-red-400' : 'text-slate-300'}`}>Shot Clock: {shotClock}s</span>
+                  <span className={`font-mono font-bold ${shotUrgent ? 'text-red-400' : 'text-slate-300'}`}>Shot: {shotClock}s</span>
                 </div>
               </div>
 
@@ -1051,7 +1051,7 @@ export const BasketballBoard: React.FC = () => {
               </button>
             </div>
 
-            {/* HORIZONTAL HIGH-FIDELITY DIAGRAM COURT */}
+            {/* HORIZONTAL DIAGRAM COURT */}
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex justify-center">
               <div className="w-full">
                 <div ref={courtRef}
@@ -1059,7 +1059,7 @@ export const BasketballBoard: React.FC = () => {
                   style={{ backgroundColor: '#fdd2ab' }}
                 >
                   
-                  {/* 1. SVG COURT LINES (CALIBRATED GEOMETRY) */}
+                  {/* 1. COMPREHENSIVE RE-ALIGNED SVG */}
                   <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none">
                     {/* Peach court boundary background */}
                     <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
@@ -1067,48 +1067,48 @@ export const BasketballBoard: React.FC = () => {
                     {/* Bench Area Bottom Strip background */}
                     <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
                     
-                    {/* Paint Zones (Keys) - Vibrant Orange */}
-                    <rect x="40" y="130" width="105" height="100" fill="#f2913f" />
-                    <rect x="435" y="130" width="105" height="100" fill="#f2913f" />
+                    {/* Key Areas (Bright Orange - Inset to Midpoint Y = 170) */}
+                    <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
+                    <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
 
-                    {/* Outer Court Boundary Lines (White, inset by 40px left/right, 30px top/bottom) */}
+                    {/* Outer Court Boundary Lines (Inset Sidelines at Y=30 and Y=310, Baselines at X=40 and X=540) */}
                     <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="2.5" />
                     
-                    {/* Half-Court line (Division line) */}
+                    {/* Half-Court line (Vertical midpoint at X = 290) */}
                     <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="2.5" />
                     
-                    {/* Center Circles */}
+                    {/* Center Restraining Circles (Aligned on Y = 170) */}
                     <circle cx="290" cy="170" r="40" fill="none" stroke="white" strokeWidth="2" />
                     <circle cx="290" cy="170" r="15" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="3,3" />
 
-                    {/* LEFT COURT HALF LINES */}
-                    {/* Left Free throw line (vertical at X=145) */}
-                    <line x1="145" y1="130" x2="145" y2="230" stroke="white" strokeWidth="2.5" />
-                    {/* Left Restricted Area Arc (Radius 25, Hoop at X=73) */}
-                    <path d="M 73,145 A 25,25 0 0,0 73,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2,2" />
-                    {/* Left Free-Throw Circle (Outer Solid, sweeping rightwards) */}
-                    <path d="M 145,130 A 50,50 0 0,1 145,230" fill="none" stroke="white" strokeWidth="2" />
-                    {/* Left Free-Throw Circle (Inner Dashed, sweeping leftwards into paint) */}
-                    <path d="M 145,130 A 50,50 0 0,0 145,230" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" />
-                    {/* Left 3-Point Line (Corners parallel to sidelines, arc sweeping rightwards) */}
+                    {/* LEFT COURT HALF LINES (Aligned on Y = 170) */}
+                    {/* Left Free throw line */}
+                    <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="2.5" />
+                    {/* Left Restricted Area Arc (Curving around the hoop, sweep flag = 1) */}
+                    <path d="M 73,145 A 25,25 0 0,1 73,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                    {/* Left Free-Throw Circle (Outer Solid half) */}
+                    <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="2" />
+                    {/* Left Free-Throw Circle (Dashed inner half inside paint) */}
+                    <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" />
+                    {/* Left 3-Point Line */}
                     <path d="M 40,45 L 110,45 A 125,125 0 0,1 110,295 L 40,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Left Backboard & Rim Support */}
+                    {/* Left Backboard, Rim, and Support */}
                     <line x1="65" y1="140" x2="65" y2="200" stroke="white" strokeWidth="3" />
                     <line x1="40" y1="170" x2="65" y2="170" stroke="white" strokeWidth="1.5" />
                     <circle cx="73" cy="170" r="8" fill="none" stroke="#ff5500" strokeWidth="2.5" />
 
-                    {/* RIGHT COURT HALF LINES */}
-                    {/* Right Free throw line (vertical at X=435) */}
-                    <line x1="435" y1="130" x2="435" y2="230" stroke="white" strokeWidth="2.5" />
-                    {/* Right Restricted Area Arc (Radius 25, Hoop at X=507) */}
-                    <path d="M 507,145 A 25,25 0 0,1 507,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2,2" />
-                    {/* Right Free-Throw Circle (Outer Solid, sweeping leftwards) */}
-                    <path d="M 435,130 A 50,50 0 0,0 435,230" fill="none" stroke="white" strokeWidth="2" />
-                    {/* Right Free-Throw Circle (Inner Dashed, sweeping rightwards into paint) */}
-                    <path d="M 435,130 A 50,50 0 0,1 435,230" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" />
-                    {/* Right 3-Point Line (Corners parallel to sidelines, arc sweeping leftwards) */}
+                    {/* RIGHT COURT HALF LINES (Aligned on Y = 170) */}
+                    {/* Right Free throw line */}
+                    <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="2.5" />
+                    {/* Right Restricted Area Arc (Curving around the hoop, sweep flag = 0) */}
+                    <path d="M 507,145 A 25,25 0 0,0 507,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                    {/* Right Free-Throw Circle (Outer Solid half) */}
+                    <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="2" />
+                    {/* Right Free-Throw Circle (Dashed inner half inside paint) */}
+                    <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" />
+                    {/* Right 3-Point Line */}
                     <path d="M 540,45 L 470,45 A 125,125 0 0,0 470,295 L 540,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Right Backboard & Rim Support */}
+                    {/* Right Backboard, Rim, and Support */}
                     <line x1="515" y1="140" x2="515" y2="200" stroke="white" strokeWidth="3" />
                     <line x1="540" y1="170" x2="515" y2="170" stroke="white" strokeWidth="1.5" />
                     <circle cx="507" cy="170" r="8" fill="none" stroke="#ff5500" strokeWidth="2.5" />
@@ -1127,7 +1127,7 @@ export const BasketballBoard: React.FC = () => {
                     {/* Right coaching/bench area box */}
                     <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
 
-                    {/* Bench texts */}
+                    {/* Bench labels */}
                     <text x="130" y="348" fill="#4d3b2b" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
                       Coaching box and Team bench area
                     </text>
