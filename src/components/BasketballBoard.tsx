@@ -251,10 +251,8 @@ export const BasketballBoard: React.FC = () => {
 
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
-        // ONLY update the local UI states if we are the VIEWER [2].
-        // This ensures the Tablet Controller remains 100% stable and glitch-free [2].
         if (mode === 'viewer') {
-          const data = response.payload;
+          const data = response.payload; // Envelope wrapper is correct for payload structures [1.2.7]
           if (!data) return;
           setHomePlayers(data.homePlayers);
           setAwayPlayers(data.awayPlayers);
@@ -339,10 +337,9 @@ export const BasketballBoard: React.FC = () => {
     };
   }, [courtDragId, isViewer]);
 
-  // Timer loop (Only run the local countdown loop if we are the active CONTROLLER) [2]
+  // Timer loop
   useEffect(() => {
-    if (!isRunning || isViewer) return; // Hides/stops local countdown loops on the TV Screen [2]
-    
+    if (!isRunning) return;
     const t = setInterval(() => {
       setGameTime(p => {
         if (clockMode === 'countdown') {
@@ -354,7 +351,7 @@ export const BasketballBoard: React.FC = () => {
       setShotClock(p => p <= 1 ? 0 : p - 1);
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, clockMode, isViewer]); // Added isViewer dependency [1]
+  }, [isRunning, clockMode]);
 
   // Scoresheet map
   const scoresheetMap = useMemo(() => {
@@ -663,62 +660,74 @@ export const BasketballBoard: React.FC = () => {
         {view === 'scoreboard' && (
           <div className="space-y-4">
             {/* Top Action Bar (Hides in Viewer mode to maintain cleanliness) */}
-            {!isViewer && (
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <List size={16} className="text-amber-400" />
-                  <span className="text-sm font-bold text-amber-400">Game Log</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Desktop actions (hidden on small screens) */}
-                  <div className="hidden sm:flex items-center gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <List size={16} className="text-amber-400" />
+                <span className="text-sm font-bold text-amber-400">Game Log</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Desktop actions (shown differently based on isViewer) [1] */}
+                <div className="hidden sm:flex items-center gap-2">
+                  {!isViewer && (
                     <button onClick={undoLast} disabled={gameEvents.length === 0}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                       <Undo2 size={13} /> Undo Last
                     </button>
-                    <button onClick={() => window.print()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                      <FileText size={13} /> Scoresheet PDF
-                    </button>
-                    <button onClick={() => setShowEvents(v => !v)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                      <List size={13} /> Events
-                    </button>
-                    <button onClick={resetGame}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                      <RotateCcw size={13} /> Reset
-                    </button>
-                    <button onClick={() => window.open('/court', '_blank')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                      <Move size={13} /> Open Tactical Page
-                    </button>
-                    <button onClick={openDisplay}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                      <LayoutDashboard size={13} /> Display
-                    </button>
-                  </div>
+                  )}
+                  {/* Scoresheet and Events are now visible to BOTH Controller and Viewer [1] */}
+                  <button onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <FileText size={13} /> Scoresheet PDF
+                  </button>
+                  <button onClick={() => setShowEvents(v => !v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <List size={13} /> Events
+                  </button>
+                  {!isViewer && (
+                    <>
+                      <button onClick={resetGame}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                        <RotateCcw size={13} /> Reset
+                      </button>
+                      <button onClick={() => window.open('/court', '_blank')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                        <Move size={13} /> Open Tactical Page
+                      </button>
+                      <button onClick={openDisplay}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                        <LayoutDashboard size={13} /> Display
+                      </button>
+                    </>
+                  )}
+                </div>
 
-                  {/* Mobile actions: single menu button that expands into a vertical list */}
-                  <div className="sm:hidden relative">
-                    <button onClick={() => setShowMobileActions(s => !s)}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-700/90 text-white text-sm font-semibold">
-                      Actions
-                    </button>
-                    {showMobileActions && (
-                      <div className="absolute right-0 mt-2 w-44 bg-slate-800 border border-slate-700 rounded shadow-lg z-30 p-2 space-y-2">
+                {/* Mobile actions: single menu button that expands into a vertical list */}
+                <div className="sm:hidden relative">
+                  <button onClick={() => setShowMobileActions(s => !s)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-700/90 text-white text-sm font-semibold">
+                    Actions
+                  </button>
+                  {showMobileActions && (
+                    <div className="absolute right-0 mt-2 w-44 bg-slate-800 border border-slate-700 rounded shadow-lg z-30 p-2 space-y-2">
+                      {!isViewer && (
                         <button onClick={undoLast} disabled={gameEvents.length === 0}
                           className="w-full text-left px-2 py-1 rounded bg-amber-700/80 text-white text-sm disabled:opacity-40">Undo Last</button>
-                        <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
-                        <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
-                        <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
-                        <button onClick={() => window.open('/court', '_blank')} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
-                        <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                      {/* Scoresheet and Events are now visible to BOTH Controller and Viewer [1] */}
+                      <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
+                      <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
+                      {!isViewer && (
+                        <>
+                          <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
+                          <button onClick={() => window.open('/court', '_blank')} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
+                          <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Scoreboard Banner */}
             <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-slate-700/50">
@@ -945,7 +954,6 @@ export const BasketballBoard: React.FC = () => {
                 <p className="text-center text-[10px] text-slate-600 italic mt-2">Player numbers appear at the cumulative score when they scored.</p>
               </div>
               
-              {/* FIXED STRUCTURAL TAG ERROR: Removed the extra closing </div> on line 593 that closed the scoresheet container prematurely. */}
               {showDebug && (
                 <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64 hidden sm:block">
                   <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents (chronological)</div>
