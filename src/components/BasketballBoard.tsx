@@ -166,7 +166,7 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
 // ==========================================
 export const BasketballBoard: React.FC = () => {
   const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); // Active Sync Role
-  const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); // Manual Sync Toggle state [2]
+  const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); // Manual Sync Toggle state
   const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED'); // Realtime Status Logger
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
   const [view, setView] = useState<'scoreboard' | 'court'>(initialView); // View switcher state
@@ -181,7 +181,7 @@ export const BasketballBoard: React.FC = () => {
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
 
-  // UI States (Correctly Declared)
+  // UI States
   const [showDebug, setShowDebug] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
@@ -199,17 +199,17 @@ export const BasketballBoard: React.FC = () => {
 
   const isViewer = mode === 'viewer';
 
-  // ── 2. DERIVED VALUES (Safely placed at the top to resolve TDZ errors) ── [1.2.6]
+  // ── DERIVED VALUES ──
   const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
   const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // Refs for local popup sync & Supabase channel references [2]
+  // Refs for local popup sync & Supabase channel references
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
-  // ── LOCAL BROADCAST CHANNEL (Offline & Popup Window Sync) ── [2]
+  // ── LOCAL BROADCAST CHANNEL (Offline & Popup Window Sync) ──
   useEffect(() => {
     try {
       bcRef.current = new BroadcastChannel('scoreboard');
@@ -235,7 +235,7 @@ export const BasketballBoard: React.FC = () => {
     try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
 
-  // ── 3. ESTABLISH A SINGLE STABLE BROADCAST CHANNEL WITH ACTIVE SUBSCRIPTION ── [2]
+  // ── ESTABLISH A SINGLE STABLE BROADCAST CHANNEL WITH ACTIVE SUBSCRIPTION ──
   useEffect(() => {
     if (!supabase || !isSyncEnabled) {
       setSyncStatus('OFFLINE');
@@ -244,7 +244,6 @@ export const BasketballBoard: React.FC = () => {
 
     setSyncStatus('CONNECTING...');
 
-    // Create a stable channel and subscribe to it permanently
     const channel = supabase.channel('basketball-sync', {
       config: { broadcast: { self: false } }
     });
@@ -252,7 +251,7 @@ export const BasketballBoard: React.FC = () => {
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
         if (mode === 'viewer') {
-          const data = response.payload; // Envelope wrapper is correct for payload structures [1.2.7]
+          const data = response.payload;
           if (!data) return;
           setHomePlayers(data.homePlayers);
           setAwayPlayers(data.awayPlayers);
@@ -266,7 +265,6 @@ export const BasketballBoard: React.FC = () => {
         }
       })
       .subscribe((status, err) => {
-        // Track the connection status
         if (status === 'SUBSCRIBED') {
           setSyncStatus('SUBSCRIBED');
         } else if (status === 'CHANNEL_ERROR') {
@@ -285,11 +283,10 @@ export const BasketballBoard: React.FC = () => {
     };
   }, [mode, isSyncEnabled]);
 
-  // ── 4. BROADCAST STATE CHANGES VIA THE STABLE CHANNEL (Controller Mode Only) ── [2]
+  // ── BROADCAST STATE CHANGES VIA THE STABLE CHANNEL (Controller Mode Only) ──
   useEffect(() => {
     if (mode !== 'controller' || !syncChannelRef.current || !isSyncEnabled) return;
 
-    // Send update packages through the stable, pre-subscribed channel
     syncChannelRef.current.send({
       type: 'broadcast',
       event: 'state-update',
@@ -307,8 +304,7 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
 
-  // ── GLOBAL TACTICAL COURT POINTER TRACKING ── [3]
-  // Actively tracks finger drag globally to prevent token stuttering on fast movements
+  // ── GLOBAL TACTICAL COURT POINTER TRACKING ──
   useEffect(() => {
     if (!courtDragId || isViewer) return;
 
@@ -375,7 +371,6 @@ export const BasketballBoard: React.FC = () => {
 
   const maxSheetRows = Math.max(homeScore, awayScore, 20);
 
-  // Sorted scorers lists (highest -> lowest), only players with points > 0
   const homeScorers = useMemo(() =>
     [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
     [homePlayers]
@@ -544,13 +539,11 @@ export const BasketballBoard: React.FC = () => {
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
 
-  // Opens local display popup via BroadcastChannel [1]
   const openDisplay = useCallback(() => {
     try {
       const features = 'toolbar=0,location=0,menubar=0,resizable=1,scrollbars=0,width=1280,height=720';
       window.open('/display', 'scoreboard_display', features);
       
-      // send init state immediately
       setTimeout(() => {
         try {
           bcRef.current?.postMessage({
@@ -564,7 +557,6 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
 
-  // Processed events
   const processedEvents = useMemo(() => {
     let total = 0;
     return [...gameEvents]
@@ -599,7 +591,6 @@ export const BasketballBoard: React.FC = () => {
                   : 'Sync Connection Closed'}
             </span>
             
-            {/* Toggle Sync Button [2] */}
             {supabase && (
               <button
                 onClick={() => setIsSyncEnabled(!isSyncEnabled)}
@@ -659,14 +650,13 @@ export const BasketballBoard: React.FC = () => {
            ========================================== */}
         {view === 'scoreboard' && (
           <div className="space-y-4">
-            {/* Top Action Bar (Hides in Viewer mode to maintain cleanliness) */}
+            {/* Top Action Bar */}
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <List size={16} className="text-amber-400" />
                 <span className="text-sm font-bold text-amber-400">Game Log</span>
               </div>
               <div className="flex items-center gap-2">
-                {/* Desktop actions (shown differently based on isViewer) [1] */}
                 <div className="hidden sm:flex items-center gap-2">
                   {!isViewer && (
                     <button onClick={undoLast} disabled={gameEvents.length === 0}
@@ -674,7 +664,6 @@ export const BasketballBoard: React.FC = () => {
                       <Undo2 size={13} /> Undo Last
                     </button>
                   )}
-                  {/* Scoresheet and Events are now visible to BOTH Controller and Viewer [1] */}
                   <button onClick={() => window.print()}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                     <FileText size={13} /> Scoresheet PDF
@@ -701,7 +690,6 @@ export const BasketballBoard: React.FC = () => {
                   )}
                 </div>
 
-                {/* Mobile actions: single menu button that expands into a vertical list */}
                 <div className="sm:hidden relative">
                   <button onClick={() => setShowMobileActions(s => !s)}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-700/90 text-white text-sm font-semibold">
@@ -713,7 +701,6 @@ export const BasketballBoard: React.FC = () => {
                         <button onClick={undoLast} disabled={gameEvents.length === 0}
                           className="w-full text-left px-2 py-1 rounded bg-amber-700/80 text-white text-sm disabled:opacity-40">Undo Last</button>
                       )}
-                      {/* Scoresheet and Events are now visible to BOTH Controller and Viewer [1] */}
                       <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
                       <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
                       {!isViewer && (
@@ -839,7 +826,7 @@ export const BasketballBoard: React.FC = () => {
               </div>
             </div>
 
-            {/* Roster Panels (Equipped with Dual Drag + Instant Swap system) */}
+            {/* Roster Panels */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <RosterPanel team="home" players={homePlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
@@ -964,7 +951,7 @@ export const BasketballBoard: React.FC = () => {
               )}
             </div>
 
-            {/* Events Log (Optional toggle) */}
+            {/* Events Log */}
             {showEvents && (
               <div className="rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-xl p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1012,12 +999,12 @@ export const BasketballBoard: React.FC = () => {
         )}
 
         {/* ==========================================
-            VIEW 2: FULL TACTICAL COURT (NEW SEPARATE VIEW) [1]
+            VIEW 2: FULL TACTICAL COURT (UPDATED WITH BASKETBALL GRAPHICS)
            ========================================== */}
         {view === 'court' && (
           <div className="space-y-4">
             
-            {/* COMPACT FLOATING SCOREBAR ON TOP OF TACTICAL COURT [1] */}
+            {/* COMPACT FLOATING SCOREBAR */}
             <div className="grid grid-cols-3 gap-2 items-center bg-slate-800/80 border border-slate-700/50 rounded-xl p-3 shadow-lg select-none">
               {/* Home Team Mini Score */}
               <div className="flex items-center gap-3 justify-start pl-4">
@@ -1046,53 +1033,75 @@ export const BasketballBoard: React.FC = () => {
               </div>
             </div>
 
-            {/* FULL COURTBOARD DIAGRAM WITH Sideline & Baseline Margins [3] */}
+            {/* FULL COURTBOARD DIAGRAM WITH BASKETBALL GRAPHICS */}
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
-              <div className="w-full overflow-auto">{/* allows horizontal scroll on small screens */}
-              <div ref={courtRef}
-                // Custom out-of-bounds padding allows tokens to drag past the lines [3]
-                className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10] touch-none"
-              >
-                {/* Court Inset Boundary Lines (Outer box is inset by 8% to create off-court space) [3] */}
-                <div className="absolute inset-x-[8%] inset-y-[8%] border-2 border-white/50 pointer-events-none">
-                  {/* Top & Bottom baselines (visible edges) */}
-                  <div className="absolute left-0 right-0 h-px bg-white/60 top-0" />
-                  <div className="absolute left-0 right-0 h-px bg-white/60 bottom-0" />
-                  {/* Half-court center dividing line */}
-                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-white/40" />
-                  {/* Center circle */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[16%] aspect-square border-2 border-white/40 rounded-full" />
-                  {/* Left Paint key and free throw area */}
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-[38%] w-[16%] border-y-2 border-r-2 border-white/40" />
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-[22%] w-[8%] border-y border-r border-white/20" />
-                  {/* Right Paint key and free throw area */}
-                  <div className="absolute top-1/2 right-0 -translate-y-1/2 h-[38%] w-[16%] border-y-2 border-l-2 border-white/40" />
-                  <div className="absolute top-1/2 right-0 -translate-y-1/2 h-[22%] w-[8%] border-y-l border-white/20" />
-                  {/* Left Three-point line arc */}
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[22%] h-[80%] border-r-2 border-white/25 rounded-r-full" />
-                  {/* Right Three-point line arc */}
-                  <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[22%] h-[80%] border-l-2 border-white/25 rounded-l-full" />
-                </div>
+              <div className="w-full overflow-auto">
+                <div ref={courtRef}
+                  className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 touch-none"
+                >
+                  {/* 1. Wood Court Surface (Inset by 8% to create off-court space) */}
+                  <div className="absolute inset-x-[8%] inset-y-[8%] bg-gradient-to-br from-[#df934e] via-[#cc7f39] to-[#b06520] border-2 border-white/95 shadow-inner">
+                    
+                    {/* 2. SVG Overlay for high-fidelity basketball lines */}
+                    <svg viewBox="0 0 280 150" className="w-full h-full absolute inset-0 pointer-events-none">
+                      {/* Half-court line */}
+                      <line x1="140" y1="0" x2="140" y2="150" stroke="white" strokeWidth="2.2" opacity="0.85" />
+                      
+                      {/* Center Court Circles */}
+                      <circle cx="140" cy="75" r="24" stroke="white" strokeWidth="2" fill="none" opacity="0.85" />
+                      <circle cx="140" cy="75" r="8" stroke="white" strokeWidth="1.5" strokeDasharray="3,3" fill="none" opacity="0.6" />
+                      
+                      {/* LEFT COURT HALF */}
+                      {/* Left Paint (Key Area) */}
+                      <rect x="0" y="46.5" width="47" height="57" fill="rgba(255, 255, 255, 0.08)" stroke="white" strokeWidth="2.2" opacity="0.9" />
+                      {/* Left Restricted Area Arc */}
+                      <path d="M 0,63 A 12,12 0 0,1 0,87" stroke="white" strokeWidth="1.5" fill="none" opacity="0.7" />
+                      {/* Left Free Throw Circle */}
+                      <path d="M 47,57 A 18,18 0 0,1 47,93" stroke="white" strokeWidth="2" fill="none" opacity="0.9" />
+                      <path d="M 47,57 A 18,18 0 0,0 47,93" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" fill="none" opacity="0.6" />
+                      {/* Left 3-Point Line (with parallel corners) */}
+                      <path d="M 0,14 L 25,14 A 61,61 0 0,1 25,136 L 0,136" stroke="white" strokeWidth="2.2" fill="none" opacity="0.85" />
+                      {/* Left Backboard, Hoop, and Support */}
+                      <line x1="0" y1="75" x2="10" y2="75" stroke="white" strokeWidth="2" opacity="0.8" />
+                      <line x1="10" y1="63" x2="10" y2="87" stroke="white" strokeWidth="3" opacity="0.9" />
+                      <circle cx="14" cy="75" r="4.5" stroke="#ff5500" strokeWidth="2.5" fill="none" opacity="0.95" />
 
-                {/* Tactical Tokens for Court Active Players */}
-                {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
-                  <div key={player.id}
-                    onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
-                    style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
-                    <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
-                      player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                    } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
-                      {player.number}
-                    </div>
-                      <span className="text-sm bg-black/85 px-2 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
-                      {player.name}
-                    </span>
+                      {/* RIGHT COURT HALF */}
+                      {/* Right Paint (Key Area) */}
+                      <rect x="233" y="46.5" width="47" height="57" fill="rgba(255, 255, 255, 0.08)" stroke="white" strokeWidth="2.2" opacity="0.9" />
+                      {/* Right Restricted Area Arc */}
+                      <path d="M 280,63 A 12,12 0 0,0 280,87" stroke="white" strokeWidth="1.5" fill="none" opacity="0.7" />
+                      {/* Right Free Throw Circle */}
+                      <path d="M 233,57 A 18,18 0 0,0 233,93" stroke="white" strokeWidth="2" fill="none" opacity="0.9" />
+                      <path d="M 233,57 A 18,18 0 0,1 233,93" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" fill="none" opacity="0.6" />
+                      {/* Right 3-Point Line (with parallel corners) */}
+                      <path d="M 280,14 L 255,14 A 61,61 0 0,0 255,136 L 280,136" stroke="white" strokeWidth="2.2" fill="none" opacity="0.85" />
+                      {/* Right Backboard, Hoop, and Support */}
+                      <line x1="280" y1="75" x2="270" y2="75" stroke="white" strokeWidth="2" opacity="0.8" />
+                      <line x1="270" y1="63" x2="270" y2="87" stroke="white" strokeWidth="3" opacity="0.9" />
+                      <circle cx="266" cy="75" r="4.5" stroke="#ff5500" strokeWidth="2.5" fill="none" opacity="0.95" />
+                    </svg>
                   </div>
-                ))}
-              </div>
+
+                  {/* Tactical Tokens for Court Active Players */}
+                  {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
+                    <div key={player.id}
+                      onPointerDown={e => handleCourtPointerDown(e, player.id)}
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
+                      style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
+                      <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
+                        player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                      } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
+                        {player.number}
+                      </div>
+                      <span className="text-sm bg-black/85 px-2 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
+                        {player.name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
+            </div>
             
             <p className="text-center text-xs text-slate-500 italic">💡 The court lines are inset. You can drag and position player tokens completely outside of the white boundary lines.</p>
           </div>
@@ -1138,8 +1147,6 @@ const RosterPanel: React.FC<{
   const courtPlayers = players.filter(p => p.status === 'court');
   const benchPlayers = players.filter(p => p.status === 'bench');
 
-  // Per-team sorted scorers (highest -> lowest). Include players who have fouls
-  // even if they haven't scored, and sort by points then fouls.
   const teamScorers = [...players]
     .filter(p => p.points > 0 || p.fouls > 0)
     .sort((a, b) => (b.points - a.points) || (b.fouls - a.fouls));
@@ -1198,7 +1205,6 @@ const RosterPanel: React.FC<{
                     <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-bold text-sm md:text-base`}>{player.fouls}</span>
                   </div>
                   
-                  {/* Score buttons with stopPropagation to avoid toggling select card */}
                   {!isViewer && (
                     <>
                       <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
@@ -1211,7 +1217,6 @@ const RosterPanel: React.FC<{
                         ))}
                       </div>
                       
-                      {/* Foul buttons with stopPropagation */}
                       <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
                         <button
                           onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
@@ -1260,25 +1265,24 @@ const RosterPanel: React.FC<{
           </div>
         </div>
             
-            {/* Player stats: quick per-team scorers under roster (restored style) */}
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
-              <div className="flex items-center gap-4 text-xs">
-                {teamScorers.length > 0 ? teamScorers.map(p => (
-                  <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
-                      {/* FIXED TYPO: Changed Inlinenum to InlineNumber */}
-                      <InlineNumber num={p.number} onSave={() => {}} className="text-xs" compact={true} disabled={isViewer} />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">Fouls: <span className={`font-bold ${p.fouls >= 4 ? 'text-red-400' : isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.fouls}</span></span>
-                    </div>
-                    <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
+        {/* Player stats */}
+        <div>
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
+          <div className="flex items-center gap-4 text-xs">
+            {teamScorers.length > 0 ? teamScorers.map(p => (
+              <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
+                  <InlineNumber num={p.number} onSave={() => {}} className="text-xs" compact={true} disabled={isViewer} />
                 </div>
-                )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
-              </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">Fouls: <span className={`font-bold ${p.fouls >= 4 ? 'text-red-400' : isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.fouls}</span></span>
+                </div>
+                <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
             </div>
+            )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+          </div>
+        </div>
       </div>
     </div>
   );
