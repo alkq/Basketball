@@ -165,11 +165,11 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
 // MAIN COMPONENT
 // ==========================================
 export const BasketballBoard: React.FC = () => {
-  const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); // Active Sync Role
-  const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); // Manual Sync Toggle state
-  const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED'); // Realtime Status Logger
+  const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); 
+  const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); 
+  const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED'); 
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
-  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); // View switcher state
+  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); 
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
   const [gameTime, setGameTime] = useState(600);
@@ -186,10 +186,10 @@ export const BasketballBoard: React.FC = () => {
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
 
-  // Instant Click Substitution state
+  // Instant Substitution
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
 
-  // Drag-drop substitution state
+  // Drag-drop substitution
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
@@ -205,11 +205,10 @@ export const BasketballBoard: React.FC = () => {
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // Refs for local popup sync & Supabase channel references
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
-  // ── LOCAL BROADCAST CHANNEL (Offline & Popup Window Sync) ──
+  // ── LOCAL BROADCAST CHANNEL ──
   useEffect(() => {
     try {
       bcRef.current = new BroadcastChannel('scoreboard');
@@ -229,13 +228,12 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
 
-  // Publish offline local broadcast updates
   useEffect(() => {
     const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls };
     try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
 
-  // ── ESTABLISH A SINGLE STABLE BROADCAST CHANNEL WITH ACTIVE SUBSCRIPTION ──
+  // ── ESTABLISH REALTIME CONNECTION ──
   useEffect(() => {
     if (!supabase || !isSyncEnabled) {
       setSyncStatus('OFFLINE');
@@ -283,7 +281,7 @@ export const BasketballBoard: React.FC = () => {
     };
   }, [mode, isSyncEnabled]);
 
-  // ── BROADCAST STATE CHANGES VIA THE STABLE CHANNEL (Controller Mode Only) ──
+  // ── BROADCAST STATE CHANGES ──
   useEffect(() => {
     if (mode !== 'controller' || !syncChannelRef.current || !isSyncEnabled) return;
 
@@ -943,7 +941,7 @@ export const BasketballBoard: React.FC = () => {
               
               {showDebug && (
                 <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64 hidden sm:block">
-                  <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents (chronological)</div>
+                  <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents</div>
                   <pre className="text-[11px] text-slate-200 whitespace-pre-wrap mb-3">{JSON.stringify(processedEvents, null, 2)}</pre>
                   <div className="text-[11px] font-bold text-slate-300 mb-2">Derived scoresheetMap</div>
                   <pre className="text-[11px] text-slate-200 whitespace-pre-wrap">{JSON.stringify(scoresheetMap, null, 2)}</pre>
@@ -999,7 +997,7 @@ export const BasketballBoard: React.FC = () => {
         )}
 
         {/* ==========================================
-            VIEW 2: FULL TACTICAL COURT (UPDATED WITH BASKETBALL GRAPHICS)
+            VIEW 2: FULL TACTICAL COURT (FIXED VIEWBOX AND LINES)
            ========================================== */}
         {view === 'court' && (
           <div className="space-y-4">
@@ -1033,53 +1031,55 @@ export const BasketballBoard: React.FC = () => {
               </div>
             </div>
 
-            {/* FULL COURTBOARD DIAGRAM WITH BASKETBALL GRAPHICS */}
+            {/* FULL COURTBOARD DIAGRAM */}
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
               <div className="w-full overflow-auto">
                 <div ref={courtRef}
                   className="min-w-[560px] md:min-w-0 relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 touch-none"
                 >
-                  {/* 1. Wood Court Surface (Inset by 8% to create off-court space) */}
+                  {/* 1. Wood Court Surface (Inset by 8%) */}
                   <div className="absolute inset-x-[8%] inset-y-[8%] bg-gradient-to-br from-[#df934e] via-[#cc7f39] to-[#b06520] border-2 border-white/95 shadow-inner">
                     
-                    {/* 2. SVG Overlay for high-fidelity basketball lines */}
-                    <svg viewBox="0 0 280 150" className="w-full h-full absolute inset-0 pointer-events-none">
-                      {/* Half-court line */}
-                      <line x1="140" y1="0" x2="140" y2="150" stroke="white" strokeWidth="2.2" opacity="0.85" />
+                    {/* 2. Corrected SVG Overlay matching 28/17 (280/170) Aspect Ratio */}
+                    <svg viewBox="0 0 280 170" className="w-full h-full absolute inset-0 pointer-events-none">
+                      {/* Center line (Extended from top edge to bottom edge) */}
+                      <line x1="140" y1="0" x2="140" y2="170" stroke="white" strokeWidth="2.5" opacity="0.9" />
                       
                       {/* Center Court Circles */}
-                      <circle cx="140" cy="75" r="24" stroke="white" strokeWidth="2" fill="none" opacity="0.85" />
-                      <circle cx="140" cy="75" r="8" stroke="white" strokeWidth="1.5" strokeDasharray="3,3" fill="none" opacity="0.6" />
+                      <circle cx="140" cy="85" r="24" stroke="white" strokeWidth="2" fill="none" opacity="0.9" />
+                      <circle cx="140" cy="85" r="8" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" fill="none" opacity="0.7" />
                       
                       {/* LEFT COURT HALF */}
                       {/* Left Paint (Key Area) */}
-                      <rect x="0" y="46.5" width="47" height="57" fill="rgba(255, 255, 255, 0.08)" stroke="white" strokeWidth="2.2" opacity="0.9" />
-                      {/* Left Restricted Area Arc */}
-                      <path d="M 0,63 A 12,12 0 0,1 0,87" stroke="white" strokeWidth="1.5" fill="none" opacity="0.7" />
-                      {/* Left Free Throw Circle */}
-                      <path d="M 47,57 A 18,18 0 0,1 47,93" stroke="white" strokeWidth="2" fill="none" opacity="0.9" />
-                      <path d="M 47,57 A 18,18 0 0,0 47,93" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" fill="none" opacity="0.6" />
-                      {/* Left 3-Point Line (with parallel corners) */}
-                      <path d="M 0,14 L 25,14 A 61,61 0 0,1 25,136 L 0,136" stroke="white" strokeWidth="2.2" fill="none" opacity="0.85" />
+                      <rect x="0" y="53" width="47" height="64" fill="rgba(255, 255, 255, 0.08)" stroke="white" strokeWidth="2.2" opacity="0.9" />
+                      {/* Left Restricted Area Arc (Dashed Line, centered under basket) */}
+                      <path d="M 10,71 A 14,14 0 0,0 10,99" stroke="white" strokeWidth="1.5" strokeDasharray="3,3" fill="none" opacity="0.7" />
+                      {/* Left Free-Throw Circle (Solid outer half) */}
+                      <path d="M 47,65 A 18,18 0 0,1 47,105" stroke="white" strokeWidth="2.2" fill="none" opacity="0.9" />
+                      {/* Left Free-Throw Circle (Dashed inner half) */}
+                      <path d="M 47,65 A 18,18 0 0,0 47,105" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" fill="none" opacity="0.6" />
+                      {/* Left 3-Point Line (Corners parallel to baseline) */}
+                      <path d="M 0,10 L 14,10 A 75,75 0 0,1 14,160 L 0,160" stroke="white" strokeWidth="2.2" fill="none" opacity="0.85" />
                       {/* Left Backboard, Hoop, and Support */}
-                      <line x1="0" y1="75" x2="10" y2="75" stroke="white" strokeWidth="2" opacity="0.8" />
-                      <line x1="10" y1="63" x2="10" y2="87" stroke="white" strokeWidth="3" opacity="0.9" />
-                      <circle cx="14" cy="75" r="4.5" stroke="#ff5500" strokeWidth="2.5" fill="none" opacity="0.95" />
+                      <line x1="0" y1="85" x2="10" y2="85" stroke="white" strokeWidth="2" opacity="0.85" />
+                      <line x1="10" y1="71" x2="10" y2="99" stroke="white" strokeWidth="3" opacity="0.9" />
+                      <circle cx="15.5" cy="85" r="5.5" stroke="#ff5500" strokeWidth="3.2" fill="none" opacity="0.95" />
 
                       {/* RIGHT COURT HALF */}
                       {/* Right Paint (Key Area) */}
-                      <rect x="233" y="46.5" width="47" height="57" fill="rgba(255, 255, 255, 0.08)" stroke="white" strokeWidth="2.2" opacity="0.9" />
-                      {/* Right Restricted Area Arc */}
-                      <path d="M 280,63 A 12,12 0 0,0 280,87" stroke="white" strokeWidth="1.5" fill="none" opacity="0.7" />
-                      {/* Right Free Throw Circle */}
-                      <path d="M 233,57 A 18,18 0 0,0 233,93" stroke="white" strokeWidth="2" fill="none" opacity="0.9" />
-                      <path d="M 233,57 A 18,18 0 0,1 233,93" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" fill="none" opacity="0.6" />
-                      {/* Right 3-Point Line (with parallel corners) */}
-                      <path d="M 280,14 L 255,14 A 61,61 0 0,0 255,136 L 280,136" stroke="white" strokeWidth="2.2" fill="none" opacity="0.85" />
+                      <rect x="233" y="53" width="47" height="64" fill="rgba(255, 255, 255, 0.08)" stroke="white" strokeWidth="2.2" opacity="0.9" />
+                      {/* Right Restricted Area Arc (Dashed Line, centered under basket) */}
+                      <path d="M 270,71 A 14,14 0 0,1 270,99" stroke="white" strokeWidth="1.5" strokeDasharray="3,3" fill="none" opacity="0.7" />
+                      {/* Right Free-Throw Circle (Solid outer half) */}
+                      <path d="M 233,65 A 18,18 0 0,0 233,105" stroke="white" strokeWidth="2.2" fill="none" opacity="0.9" />
+                      {/* Right Free-Throw Circle (Dashed inner half) */}
+                      <path d="M 233,65 A 18,18 0 0,1 233,105" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" fill="none" opacity="0.6" />
+                      {/* Right 3-Point Line (Corners parallel to baseline) */}
+                      <path d="M 280,10 L 266,10 A 75,75 0 0,0 266,160 L 280,160" stroke="white" strokeWidth="2.2" fill="none" opacity="0.85" />
                       {/* Right Backboard, Hoop, and Support */}
-                      <line x1="280" y1="75" x2="270" y2="75" stroke="white" strokeWidth="2" opacity="0.8" />
-                      <line x1="270" y1="63" x2="270" y2="87" stroke="white" strokeWidth="3" opacity="0.9" />
-                      <circle cx="266" cy="75" r="4.5" stroke="#ff5500" strokeWidth="2.5" fill="none" opacity="0.95" />
+                      <line x1="280" y1="85" x2="270" y2="85" stroke="white" strokeWidth="2" opacity="0.85" />
+                      <line x1="270" y1="71" x2="270" y2="99" stroke="white" strokeWidth="3" opacity="0.9" />
+                      <circle cx="264.5" cy="85" r="5.5" stroke="#ff5500" strokeWidth="3.2" fill="none" opacity="0.95" />
                     </svg>
                   </div>
 
