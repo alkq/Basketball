@@ -205,53 +205,7 @@ export const BasketballBoard: React.FC = () => {
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // Scoresheet map (Declared before effects use them) [1.2.6]
-  const scoresheetMap = useMemo(() => {
-    const home: Record<number, { playerNumber: number; playerName: string }> = {};
-    const away: Record<number, { playerNumber: number; playerName: string }> = {};
-    let homeTotal = 0;
-    let awayTotal = 0;
-    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    for (const ev of events) {
-      if (!ev.value || ev.value <= 0) continue;
-      if (ev.team === 'home') {
-        homeTotal += ev.value;
-        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      } else {
-        awayTotal += ev.value;
-        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      }
-    }
-    return { home, away };
-  }, [gameEvents]);
-
-  const maxSheetRows = Math.max(homeScore, awayScore, 20);
-
-  // Sorted scorers lists (highest -> lowest), only players with points > 0
-  const homeScorers = useMemo(() =>
-    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [homePlayers]
-  );
-  const awayScorers = useMemo(() =>
-    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [awayPlayers]
-  );
-
-  // Processed events (Declared before JSX rendering use) [1.2.6]
-  const processedEvents = useMemo(() => {
-    let total = 0;
-    return [...gameEvents]
-      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-      .map(ev => {
-        if (ev.type === 'score' && ev.value && ev.value > 0) {
-          total += ev.value;
-          return { ...ev, cumulativeTotal: total };
-        }
-        return { ...ev, cumulativeTotal: total };
-      });
-  }, [gameEvents]);
-
-  // Refs for local popup sync
+  // Refs for local popup sync & Supabase channel references [2]
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
@@ -297,8 +251,10 @@ export const BasketballBoard: React.FC = () => {
 
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
+        // ONLY update the local UI states if we are the VIEWER [2].
+        // This ensures the Tablet Controller remains 100% stable and glitch-free [2].
         if (mode === 'viewer') {
-          const data = response.payload; // Envelope wrapper is correct for payload structures
+          const data = response.payload;
           if (!data) return;
           setHomePlayers(data.homePlayers);
           setAwayPlayers(data.awayPlayers);
@@ -383,9 +339,10 @@ export const BasketballBoard: React.FC = () => {
     };
   }, [courtDragId, isViewer]);
 
-  // Timer loop
+  // Timer loop (Only run the local countdown loop if we are the active CONTROLLER) [2]
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || isViewer) return; // Hides/stops local countdown loops on the TV Screen [2]
+    
     const t = setInterval(() => {
       setGameTime(p => {
         if (clockMode === 'countdown') {
@@ -397,7 +354,39 @@ export const BasketballBoard: React.FC = () => {
       setShotClock(p => p <= 1 ? 0 : p - 1);
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, clockMode]);
+  }, [isRunning, clockMode, isViewer]); // Added isViewer dependency [1]
+
+  // Scoresheet map
+  const scoresheetMap = useMemo(() => {
+    const home: Record<number, { playerNumber: number; playerName: string }> = {};
+    const away: Record<number, { playerNumber: number; playerName: string }> = {};
+    let homeTotal = 0;
+    let awayTotal = 0;
+    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    for (const ev of events) {
+      if (!ev.value || ev.value <= 0) continue;
+      if (ev.team === 'home') {
+        homeTotal += ev.value;
+        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      } else {
+        awayTotal += ev.value;
+        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      }
+    }
+    return { home, away };
+  }, [gameEvents]);
+
+  const maxSheetRows = Math.max(homeScore, awayScore, 20);
+
+  // Sorted scorers lists (highest -> lowest), only players with points > 0
+  const homeScorers = useMemo(() =>
+    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [homePlayers]
+  );
+  const awayScorers = useMemo(() =>
+    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [awayPlayers]
+  );
 
   // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
@@ -577,6 +566,20 @@ export const BasketballBoard: React.FC = () => {
       // ignore
     }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
+
+  // Processed events
+  const processedEvents = useMemo(() => {
+    let total = 0;
+    return [...gameEvents]
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+      .map(ev => {
+        if (ev.type === 'score' && ev.value && ev.value > 0) {
+          total += ev.value;
+          return { ...ev, cumulativeTotal: total };
+        }
+        return { ...ev, cumulativeTotal: total };
+      });
+  }, [gameEvents]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
@@ -1180,7 +1183,7 @@ const RosterPanel: React.FC<{
                     <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                   </div>
                   <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                    className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px]" />
+                    className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
                   <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
                   <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
                     <span className="text-xs md:text-sm">Fouls:</span>
@@ -1249,7 +1252,7 @@ const RosterPanel: React.FC<{
           </div>
         </div>
             
-            {/* Player stats: quick per-team scorers under roster (restored style yes) */}
+            {/* Player stats: quick per-team scorers under roster (restored style) */}
             <div>
               <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
               <div className="flex items-center gap-4 text-xs">

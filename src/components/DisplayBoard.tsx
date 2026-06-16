@@ -107,12 +107,16 @@ const DisplayBoard: React.FC = () => {
           <div className="relative">
             {/* LED Ambient Glow */}
             <div className="absolute inset-0 bg-orange-600/10 blur-3xl rounded-full scale-110" />
-            <div className="relative bg-gradient-to-br from-orange-600 to-orange-800 text-white text-8xl sm:text-9xl md:text-[12rem] lg:text-[14rem] xl:text-[18rem] font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums border border-orange-500/20 drop-shadow-[0_0_30px_rgba(249,115,22,0.3)]">
+            <div className="relative bg-gradient-to-br from-orange-600 to-orange-800 text-white text-9xl sm:text-[13rem] md:text-[17rem] lg:text-[20rem] xl:text-[24rem] font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tracking-tighter tabular-nums border border-orange-500/20 drop-shadow-[0_0_30px_rgba(249,115,22,0.3)]">
               {state.homeScore}
             </div>
           </div>
-          <div className="text-xl md:text-3xl lg:text-4xl text-orange-300 font-bold tracking-wide uppercase pt-2">
-            Fouls: <span className="text-white font-extrabold text-2xl md:text-4xl lg:text-5xl ml-1">{state.homeFouls}</span>
+          {/* Stacked and Enlarged Fouls Indicator [3] */}
+          <div className="flex flex-col items-center justify-center gap-1.5 pt-4">
+            <span className="text-slate-500 text-xs sm:text-sm md:text-xl font-bold uppercase tracking-widest">Fouls</span>
+            <span className="text-red-500 font-black text-4xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl drop-shadow-[0_0_15px_rgba(239,68,68,0.4)] leading-none select-none">
+              {state.homeFouls}
+            </span>
           </div>
         </div>
 
@@ -164,12 +168,16 @@ const DisplayBoard: React.FC = () => {
           <div className="relative">
             {/* LED Ambient Glow */}
             <div className="absolute inset-0 bg-blue-600/10 blur-3xl rounded-full scale-110" />
-            <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 text-white text-8xl sm:text-9xl md:text-[12rem] lg:text-[14rem] xl:text-[18rem] font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums border border-blue-500/20 drop-shadow-[0_0_30px_rgba(37,99,235,0.3)]">
+            <div className="relative bg-gradient-to-br from-blue-600 to-blue-800 text-white text-9xl sm:text-[13rem] md:text-[17rem] lg:text-[20rem] xl:text-[24rem] font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tracking-tighter tabular-nums border border-blue-500/20 drop-shadow-[0_0_30px_rgba(37,99,235,0.3)]">
               {state.awayScore}
             </div>
           </div>
-          <div className="text-xl md:text-3xl lg:text-4xl text-sky-300 font-bold tracking-wide uppercase pt-2">
-            Fouls: <span className="text-white font-extrabold text-2xl md:text-4xl lg:text-5xl ml-1">{state.awayFouls}</span>
+          {/* Stacked and Enlarged Fouls Indicator [3] */}
+          <div className="flex flex-col items-center justify-center gap-1.5 pt-4">
+            <span className="text-slate-500 text-xs sm:text-sm md:text-xl font-bold uppercase tracking-widest">Fouls</span>
+            <span className="text-red-500 font-black text-4xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl drop-shadow-[0_0_15px_rgba(239,68,68,0.4)] leading-none select-none">
+              {state.awayFouls}
+            </span>
           </div>
         </div>
 
