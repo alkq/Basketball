@@ -1059,7 +1059,7 @@ export const BasketballBoard: React.FC = () => {
                   style={{ backgroundColor: '#fdd2ab' }}
                 >
                   
-                  {/* 1. COMPREHENSIVE RE-ALIGNED SVG */}
+                  {/* 1. RE-ALIGNED SVG */}
                   <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none">
                     {/* Peach court boundary background */}
                     <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
@@ -1079,39 +1079,39 @@ export const BasketballBoard: React.FC = () => {
                     
                     {/* Center Restraining Circles (Aligned on Y = 170) */}
                     <circle cx="290" cy="170" r="40" fill="none" stroke="white" strokeWidth="2" />
-                    <circle cx="290" cy="170" r="15" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="3,3" />
+                    <circle cx="290" cy="170" r="10" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2.5,2.5" />
 
                     {/* LEFT COURT HALF LINES (Aligned on Y = 170) */}
                     {/* Left Free throw line */}
                     <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="2.5" />
-                    {/* Left Restricted Area Arc (Curving around the hoop, sweep flag = 1) */}
-                    <path d="M 73,145 A 25,25 0 0,1 73,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                    {/* Left Restricted Area Arc (Curving around the hoop, shifted back to X = 59, sweep flag = 1) */}
+                    <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
                     {/* Left Free-Throw Circle (Outer Solid half) */}
                     <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="2" />
                     {/* Left Free-Throw Circle (Dashed inner half inside paint) */}
-                    <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" />
+                    <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
                     {/* Left 3-Point Line */}
                     <path d="M 40,45 L 110,45 A 125,125 0 0,1 110,295 L 40,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Left Backboard, Rim, and Support */}
-                    <line x1="65" y1="140" x2="65" y2="200" stroke="white" strokeWidth="3" />
-                    <line x1="40" y1="170" x2="65" y2="170" stroke="white" strokeWidth="1.5" />
-                    <circle cx="73" cy="170" r="8" fill="none" stroke="#ff5500" strokeWidth="2.5" />
+                    {/* Left Backboard, Rim, and Support (Shifted back closer to baseline) */}
+                    <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="3" />
+                    <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="1.5" />
+                    <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
 
                     {/* RIGHT COURT HALF LINES (Aligned on Y = 170) */}
                     {/* Right Free throw line */}
                     <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="2.5" />
-                    {/* Right Restricted Area Arc (Curving around the hoop, sweep flag = 0) */}
-                    <path d="M 507,145 A 25,25 0 0,0 507,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                    {/* Right Restricted Area Arc (Curving around the hoop, shifted back to X = 521, sweep flag = 0) */}
+                    <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
                     {/* Right Free-Throw Circle (Outer Solid half) */}
                     <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="2" />
                     {/* Right Free-Throw Circle (Dashed inner half inside paint) */}
-                    <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4,4" />
+                    <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
                     {/* Right 3-Point Line */}
                     <path d="M 540,45 L 470,45 A 125,125 0 0,0 470,295 L 540,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Right Backboard, Rim, and Support */}
-                    <line x1="515" y1="140" x2="515" y2="200" stroke="white" strokeWidth="3" />
-                    <line x1="540" y1="170" x2="515" y2="170" stroke="white" strokeWidth="1.5" />
-                    <circle cx="507" cy="170" r="8" fill="none" stroke="#ff5500" strokeWidth="2.5" />
+                    {/* Right Backboard, Rim, and Support (Shifted back closer to baseline) */}
+                    <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="3" />
+                    <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="1.5" />
+                    <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
 
                     {/* Sideline Hashmarks (Throw-in line / midcourt area marker) */}
                     <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="1.8" />
