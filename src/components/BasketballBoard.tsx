@@ -166,11 +166,16 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
 // MAIN COMPONENT
 // ==========================================
 export const BasketballBoard: React.FC = () => {
+  // Sync Role States
   const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); 
   const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); 
   const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED'); 
+
+  // UI View States
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
   const [view, setView] = useState<'scoreboard' | 'court'>(initialView); 
+
+  // Game States
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
   const [gameTime, setGameTime] = useState(600);
@@ -183,7 +188,7 @@ export const BasketballBoard: React.FC = () => {
   const [showEvents, setShowEvents] = useState(false);
   const [showDiagramLabels, setShowDiagramLabels] = useState(false);
   
-  // Timer sync helper key to reset the active interval
+  // Timer sync helper key to reset only the shot clock active interval
   const [timerResetKey, setTimerResetKey] = useState(0);
 
   // UI States
@@ -260,7 +265,7 @@ export const BasketballBoard: React.FC = () => {
           setAwayPlayers(data.awayPlayers);
           setGameTime(data.gameTime);
           
-          // Reset local viewer interval whenever a manual 24s/14s override occurs
+          // Reset local viewer shot clock interval when a manual 24s/14s override occurs
           if (data.shotClock !== shotClock && (data.shotClock === 24 || data.shotClock === 14)) {
             setTimerResetKey(k => k + 1);
           }
@@ -342,7 +347,7 @@ export const BasketballBoard: React.FC = () => {
     };
   }, [courtDragId, isViewer]);
 
-  // Timer loop (with timerResetKey listener to restart intervals on manual overrides)
+  // ── INDEPENDENT GAME CLOCK LOOP ──
   useEffect(() => {
     if (!isRunning) return;
     const t = setInterval(() => {
@@ -353,10 +358,18 @@ export const BasketballBoard: React.FC = () => {
         }
         return p + 1;
       });
-      setShotClock(p => p <= 1 ? 0 : p - 1);
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, clockMode, timerResetKey]);
+  }, [isRunning, clockMode]);
+
+  // ── INDEPENDENT SHOT CLOCK LOOP ──
+  useEffect(() => {
+    if (!isRunning) return;
+    const t = setInterval(() => {
+      setShotClock(p => (p <= 1 ? 0 : p - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isRunning, timerResetKey]);
 
   // Scoresheet map
   const scoresheetMap = useMemo(() => {
@@ -549,7 +562,7 @@ export const BasketballBoard: React.FC = () => {
   const handleResetShotClock = (seconds: number) => {
     if (isViewer) return;
     setShotClock(seconds);
-    setTimerResetKey(k => k + 1); // Forces active interval to clear and start a fresh 1-second countdown
+    setTimerResetKey(k => k + 1); // Triggers shot-clock only interval to clear and start a fresh 1-second countdown
   };
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
