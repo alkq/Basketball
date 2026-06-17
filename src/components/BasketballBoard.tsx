@@ -218,6 +218,10 @@ export const BasketballBoard: React.FC = () => {
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
+  // Helper arrays for calculating visual bench coordinates on the court board
+  const homeBenchLineups = useMemo(() => homePlayers.filter(p => p.status === 'bench'), [homePlayers]);
+  const awayBenchLineups = useMemo(() => awayPlayers.filter(p => p.status === 'bench'), [awayPlayers]);
+
   // ── LOCAL BROADCAST CHANNEL ──
   useEffect(() => {
     try {
@@ -414,8 +418,14 @@ export const BasketballBoard: React.FC = () => {
 
     const setter = p1.team === 'home' ? setHomePlayers : setAwayPlayers;
     setter(prev => prev.map(p => {
-      if (p.id === p1.id) return { ...p, status: p2.status };
-      if (p.id === p2.id) return { ...p, status: p1.status };
+      if (p.id === p1.id) {
+        // Outgoing player goes to bench
+        return { ...p, status: p2.status };
+      }
+      if (p.id === p2.id) {
+        // Incoming player takes outgoing court coordinates so they spawn on the exact same location [1]
+        return { ...p, status: p1.status, x: p1.x, y: p1.y };
+      }
       return p;
     }));
   }, [homePlayers, awayPlayers, isViewer]);
@@ -959,7 +969,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
@@ -1067,7 +1077,7 @@ export const BasketballBoard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <Info size={14} className="text-amber-400" />
-                <span>Drag court tokens to place them in precise tactical alignments.</span>
+                <span>Drag active players. Select a court player, then click a bench player below to substitute [1].</span>
               </div>
               <button
                 onClick={() => setShowDiagramLabels(prev => !prev)}
@@ -1157,14 +1167,14 @@ export const BasketballBoard: React.FC = () => {
                     {/* Right coaching/bench area box */}
                     <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
 
-                    {/* Bench labels */}
-                    <text x="130" y="348" fill="#4d3b2b" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
+                    {/* Bench labels (Watermarked with low opacity so they do not conflict with the player tokens) [1] */}
+                    <text x="130" y="348" fill="#4d3b2b" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle" opacity="0.2">
                       Coaching box and Team bench area
                     </text>
-                    <text x="290" y="348" fill="#4d3b2b" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
+                    <text x="290" y="348" fill="#4d3b2b" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle" opacity="0.2">
                       Substitution box
                     </text>
-                    <text x="450" y="348" fill="#4d3b2b" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
+                    <text x="450" y="348" fill="#4d3b2b" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle" opacity="0.2">
                       Coaching box and Team bench area
                     </text>
 
@@ -1210,22 +1220,86 @@ export const BasketballBoard: React.FC = () => {
                     )}
                   </svg>
 
-                  {/* 2. DRAGGABLE COURT PLAYER TOKENS */}
-                  {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
-                    <div key={player.id}
-                      onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
-                      style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
-                      <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
-                        player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                      } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
-                        {player.number}
+                  {/* 2. DRAGGABLE COURT ACTIVE PLAYERS */}
+                  {homePlayers.filter(p => p.status === 'court').map(player => {
+                    const isSelected = selectedCourtId === player.id;
+                    return (
+                      <div key={player.id}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
+                        onClick={(e) => { e.stopPropagation(); handleSelectCourt(player.id); }}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
+                        style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 flex items-center justify-center font-black text-white text-xs md:text-sm shadow-lg transition-all ${
+                          isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 bg-gradient-to-br from-yellow-500 to-yellow-700' : 'border-white/95 bg-gradient-to-br from-red-500 to-red-700'
+                        }`}>
+                          {player.number}
+                        </div>
+                        <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
+                          {player.name}
+                        </span>
                       </div>
-                      <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
-                        {player.name}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
+
+                  {awayPlayers.filter(p => p.status === 'court').map(player => {
+                    const isSelected = selectedCourtId === player.id;
+                    return (
+                      <div key={player.id}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
+                        onClick={(e) => { e.stopPropagation(); handleSelectCourt(player.id); }}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
+                        style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 flex items-center justify-center font-black text-white text-xs md:text-sm shadow-lg transition-all ${
+                          isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 bg-gradient-to-br from-yellow-500 to-yellow-700' : 'border-white/95 bg-gradient-to-br from-blue-500 to-blue-700'
+                        }`}>
+                          {player.number}
+                        </div>
+                        <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
+                          {player.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* 3. DYNAMIC COURT BENCH PLAYERS (ACTIVE SWAPPING IN BOTTOM BOXES) [1] */}
+                  {homeBenchLineups.map((player, index) => {
+                    const xPoints = [9.5, 15.5, 21.5, 27.6, 33.6];
+                    const leftPct = xPoints[index % xPoints.length];
+                    const topPct = 90.8;
+                    return (
+                      <div key={player.id}
+                        onClick={(e) => { e.stopPropagation(); handleBenchClick(player.id); }}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-pointer hover:scale-105 transition-transform`}
+                        style={{ left: `${leftPct}%`, top: `${topPct}%` }}>
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full border-2 border-white/80 shadow-md flex items-center justify-center font-black text-white text-[10px] sm:text-xs bg-red-900/60">
+                          {player.number}
+                        </div>
+                        <span className="text-[9px] bg-black/85 px-1 py-0.5 rounded text-white mt-0.5 leading-none max-w-[48px] sm:max-w-[56px] truncate">
+                          {player.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {awayBenchLineups.map((player, index) => {
+                    const xPoints = [64.6, 70.7, 76.7, 82.8, 88.8];
+                    const leftPct = xPoints[index % xPoints.length];
+                    const topPct = 90.8;
+                    return (
+                      <div key={player.id}
+                        onClick={(e) => { e.stopPropagation(); handleBenchClick(player.id); }}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-pointer hover:scale-105 transition-transform`}
+                        style={{ left: `${leftPct}%`, top: `${topPct}%` }}>
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full border-2 border-white/80 shadow-md flex items-center justify-center font-black text-white text-[10px] sm:text-xs bg-blue-900/60">
+                          {player.number}
+                        </div>
+                        <span className="text-[9px] bg-black/85 px-1 py-0.5 rounded text-white mt-0.5 leading-none max-w-[48px] sm:max-w-[56px] truncate">
+                          {player.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+
                 </div>
               </div>
             </div>
