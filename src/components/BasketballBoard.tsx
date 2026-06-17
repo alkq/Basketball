@@ -700,6 +700,10 @@ export const BasketballBoard: React.FC = () => {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                     <List size={13} /> Events
                   </button>
+                  <button onClick={openDisplay}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <LayoutDashboard size={13} /> Display
+                  </button>
                   {!isViewer && (
                     <>
                       <button onClick={resetGame}
@@ -709,10 +713,6 @@ export const BasketballBoard: React.FC = () => {
                       <button onClick={() => setView('court')}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                         <Move size={13} /> Open Tactical Page
-                      </button>
-                      <button onClick={openDisplay}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                        <LayoutDashboard size={13} /> Display
                       </button>
                     </>
                   )}
@@ -731,11 +731,13 @@ export const BasketballBoard: React.FC = () => {
                       )}
                       <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
                       <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
+                      
+                      <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
+
                       {!isViewer && (
                         <>
                           <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
                           <button onClick={() => { setView('court'); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
-                          <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
                         </>
                       )}
                     </div>
@@ -957,7 +959,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
