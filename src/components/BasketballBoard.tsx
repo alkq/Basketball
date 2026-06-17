@@ -182,6 +182,9 @@ export const BasketballBoard: React.FC = () => {
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
   const [showDiagramLabels, setShowDiagramLabels] = useState(false);
+  
+  // Timer sync helper key to reset the active interval
+  const [timerResetKey, setTimerResetKey] = useState(0);
 
   // UI States
   const [showDebug, setShowDebug] = useState(false);
@@ -256,7 +259,13 @@ export const BasketballBoard: React.FC = () => {
           setHomePlayers(data.homePlayers);
           setAwayPlayers(data.awayPlayers);
           setGameTime(data.gameTime);
+          
+          // Reset local viewer interval whenever a manual 24s/14s override occurs
+          if (data.shotClock !== shotClock && (data.shotClock === 24 || data.shotClock === 14)) {
+            setTimerResetKey(k => k + 1);
+          }
           setShotClock(data.shotClock);
+          
           setIsRunning(data.isRunning);
           setPeriod(data.period);
           setGameEvents(data.gameEvents);
@@ -281,7 +290,7 @@ export const BasketballBoard: React.FC = () => {
       supabase.removeChannel(channel);
       syncChannelRef.current = null;
     };
-  }, [mode, isSyncEnabled]);
+  }, [mode, isSyncEnabled, shotClock]);
 
   // ── BROADCAST STATE CHANGES ──
   useEffect(() => {
@@ -333,7 +342,7 @@ export const BasketballBoard: React.FC = () => {
     };
   }, [courtDragId, isViewer]);
 
-  // Timer loop
+  // Timer loop (with timerResetKey listener to restart intervals on manual overrides)
   useEffect(() => {
     if (!isRunning) return;
     const t = setInterval(() => {
@@ -347,7 +356,7 @@ export const BasketballBoard: React.FC = () => {
       setShotClock(p => p <= 1 ? 0 : p - 1);
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, clockMode]);
+  }, [isRunning, clockMode, timerResetKey]);
 
   // Scoresheet map
   const scoresheetMap = useMemo(() => {
@@ -536,6 +545,12 @@ export const BasketballBoard: React.FC = () => {
       setIsRunning(false);
     }
   }, [inputMins, isViewer]);
+
+  const handleResetShotClock = (seconds: number) => {
+    if (isViewer) return;
+    setShotClock(seconds);
+    setTimerResetKey(k => k + 1); // Forces active interval to clear and start a fresh 1-second countdown
+  };
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
 
@@ -784,11 +799,11 @@ export const BasketballBoard: React.FC = () => {
                     </div>
                     {!isViewer && (
                       <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
-                        <button onClick={() => setShotClock(24)}
+                        <button onClick={() => handleResetShotClock(24)}
                           className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
                           <RefreshCw size={9} />24s
                         </button>
-                        <button onClick={() => setShotClock(14)}
+                        <button onClick={() => handleResetShotClock(14)}
                           className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
                           <RefreshCw size={9} />14s
                         </button>
