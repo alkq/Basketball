@@ -6,7 +6,7 @@ import {
   UserCheck, Edit3, Check, RotateCcw,
   Undo2, FileText, List, RefreshCw,
   LayoutDashboard, Move, Monitor, Smartphone,
-  Info
+  Info, Pencil, Eraser, Trash2
 } from 'lucide-react';
 
 // ==========================================
@@ -164,6 +164,20 @@ const createAwayPlayers = (): Player[] => [
   { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 88.5, y: 91 },
 ];
 
+// Helper to compute point-to-line segment distance for relative percentages [1]
+const getPointToSegmentDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (dx === 0 && dy === 0) {
+    return Math.sqrt(Math.pow(px - x1, 2) + Math.pow(py - y1, 2));
+  }
+  let t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+  t = Math.max(0, Math.min(1, t));
+  const closestX = x1 + t * dx;
+  const closestY = y1 + t * dy;
+  return Math.sqrt(Math.pow(px - closestX, 2) + Math.pow(py - closestY, 2));
+};
+
 // ==========================================
 // MAIN COMPONENT
 // ==========================================
@@ -189,6 +203,13 @@ export const BasketballBoard: React.FC = () => {
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
   const [showDiagramLabels, setShowDiagramLabels] = useState(false);
+  
+  // Tactical Board State & Drawing Systems [1]
+  const [activeTool, setActiveTool] = useState<'move' | 'draw' | 'erase'>('move');
+  const [drawings, setDrawings] = useState<{ id: string; points: { x: number; y: number }[]; color: string }[]>([]);
+  const [currentDrawingPoints, setCurrentDrawingPoints] = useState<{ x: number; y: number }[]>([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [strokeColor, setStrokeColor] = useState('#ff4444');
   
   // Multi-Touch Pointer Drag Tracking Refs [1]
   const activeDragsRef = useRef<Record<number, { 
@@ -216,7 +237,6 @@ export const BasketballBoard: React.FC = () => {
 
   // Tactical court drag states
   const [courtDragId, setCourtDragId] = useState<string | null>(null);
-  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const courtRef = useRef<HTMLDivElement>(null);
 
   const isViewer = mode === 'viewer';
@@ -339,6 +359,10 @@ export const BasketballBoard: React.FC = () => {
           setGameEvents(data.gameEvents);
           setView(data.view);
           setClockMode(data.clockMode);
+          
+          // LIVE DRAWINGS SYNC [1]
+          if (data.drawings !== undefined) setDrawings(data.drawings);
+          if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
         }
       })
       .subscribe((status, err) => {
@@ -376,10 +400,12 @@ export const BasketballBoard: React.FC = () => {
         period,
         gameEvents,
         view,
-        clockMode
+        clockMode,
+        drawings,
+        currentDrawingPoints
       }
     });
-  }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
+  }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints]);
 
   // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ── [1]
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
@@ -461,6 +487,82 @@ export const BasketballBoard: React.FC = () => {
     }
     delete activeDragsRef.current[e.pointerId];
     setCourtDragId(null);
+  };
+
+  // ── TACTICAL BOARD FREEHAND DRAWING & ERASING HANDLERS ── [1]
+  const handleCourtBgPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isViewer || activeTool === 'move') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = courtRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    if (activeTool === 'draw') {
+      setIsDrawing(true);
+      setCurrentDrawingPoints([{ x, y }]);
+    } else if (activeTool === 'erase') {
+      setIsDrawing(true);
+      eraseAtPoint(x, y);
+    }
+  };
+
+  const handleCourtBgPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isViewer || !isDrawing) return;
+
+    const rect = courtRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    if (activeTool === 'draw') {
+      setCurrentDrawingPoints(prev => [...prev, { x, y }]);
+    } else if (activeTool === 'erase') {
+      eraseAtPoint(x, y);
+    }
+  };
+
+  const handleCourtBgPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isViewer) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (err) {}
+
+    if (activeTool === 'draw' && isDrawing && currentDrawingPoints.length > 1) {
+      setDrawings(prev => [
+        ...prev,
+        {
+          id: uid(),
+          points: currentDrawingPoints,
+          color: strokeColor
+        }
+      ]);
+    }
+
+    setIsDrawing(false);
+    setCurrentDrawingPoints([]);
+  };
+
+  const eraseAtPoint = (ex: number, ey: number) => {
+    setDrawings(prev => {
+      return prev.filter(drawing => {
+        const pts = drawing.points;
+        const threshold = 3.5; // Erase sensitivity radius (3.5% of court width)
+        for (let i = 0; i < pts.length - 1; i++) {
+          const dist = getPointToSegmentDistance(ex, ey, pts[i].x, pts[i].y, pts[i+1].x, pts[i+1].y);
+          if (dist < threshold) {
+            return false; // Wipe the entire continuous path [1]
+          }
+        }
+        return true;
+      });
+    });
   };
 
   // ── INDEPENDENT GAME CLOCK LOOP ──
@@ -705,7 +807,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('scoreboard')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <LayoutDashboard size={16} /> Scoreboard & Rosters
@@ -957,7 +1059,7 @@ export const BasketballBoard: React.FC = () => {
                   <table className="mx-auto w-full text-sm border-collapse">
                     <thead>
                       <tr>
-                        <th className="bg-orange-950/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Home</th>
+                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Home</th>
                         <th className="bg-slate-700/60 text-slate-300 border border-slate-600 px-3 py-1.5 font-bold w-14 text-center">Score</th>
                         <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Away</th>
                       </tr>
@@ -1132,16 +1234,20 @@ export const BasketballBoard: React.FC = () => {
 
             {/* HORIZONTAL DIAGRAM COURT */}
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex justify-center">
-              <div className="w-full">
+              <div className="w-full relative">
                 <div ref={courtRef}
+                  onPointerDown={handleCourtBgPointerDown}
+                  onPointerMove={handleCourtBgPointerMove}
+                  onPointerUp={handleCourtBgPointerUp}
+                  onPointerCancel={handleCourtBgPointerUp}
                   className={`min-w-[560px] md:min-w-0 relative aspect-[58/38] w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
-                    courtDragId ? 'touch-none' : 'touch-auto'
+                    courtDragId || isDrawing ? 'touch-none' : 'touch-auto'
                   }`}
                   style={{ backgroundColor: '#fdd2ab' }}
                 >
                   
                   {/* 1. RE-ALIGNED SVG */}
-                  <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none">
+                  <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
                     {/* Peach court boundary background */}
                     <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
                     
@@ -1165,7 +1271,7 @@ export const BasketballBoard: React.FC = () => {
                     {/* LEFT COURT HALF LINES (Aligned on Y = 170) */}
                     {/* Left Free throw line */}
                     <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="2.5" />
-                    {/* Left Restricted Area Arc (Curving around the hoop, shifted back to X = 59, sweep flag = 1) */}
+                    {/* Left Restricted Area Arc */}
                     <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
                     {/* Left Free-Throw Circle (Outer Solid half) */}
                     <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="2" />
@@ -1173,7 +1279,7 @@ export const BasketballBoard: React.FC = () => {
                     <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
                     {/* Left 3-Point Line */}
                     <path d="M 40,45 L 110,45 A 125,125 0 0,1 110,295 L 40,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Left Backboard, Rim, and Support (Shifted back closer to baseline) */}
+                    {/* Left Backboard, Rim, and Support */}
                     <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="3" />
                     <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="1.5" />
                     <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
@@ -1181,7 +1287,7 @@ export const BasketballBoard: React.FC = () => {
                     {/* RIGHT COURT HALF LINES (Aligned on Y = 170) */}
                     {/* Right Free throw line */}
                     <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="2.5" />
-                    {/* Right Restricted Area Arc (Curving around the hoop, shifted back to X = 521, sweep flag = 0) */}
+                    {/* Right Restricted Area Arc */}
                     <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
                     {/* Right Free-Throw Circle (Outer Solid half) */}
                     <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="2" />
@@ -1189,12 +1295,12 @@ export const BasketballBoard: React.FC = () => {
                     <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
                     {/* Right 3-Point Line */}
                     <path d="M 540,45 L 470,45 A 125,125 0 0,0 470,295 L 540,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Right Backboard, Rim, and Support (Shifted back closer to baseline) */}
+                    {/* Right Backboard, Rim, and Support */}
                     <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="3" />
                     <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="1.5" />
                     <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
 
-                    {/* Sideline Hashmarks (Throw-in line / midcourt area marker) */}
+                    {/* Sideline Hashmarks */}
                     <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="1.8" />
                     <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="1.8" />
                     <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="1.8" />
@@ -1207,7 +1313,7 @@ export const BasketballBoard: React.FC = () => {
                     {/* Right coaching/bench area box */}
                     <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
 
-                    {/* Bench labels (Watermarked inside the background) */}
+                    {/* Bench labels */}
                     <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
                       Coaching box and Team bench area
                     </text>
@@ -1218,7 +1324,34 @@ export const BasketballBoard: React.FC = () => {
                       Coaching box and Team bench area
                     </text>
 
-                    {/* DIAGRAM LABELS (Conditional overlay) */}
+                    {/* RENDERING COMPLETE FREEHAND DRAWINGS [1] */}
+                    {drawings.map(drawing => (
+                      <polyline
+                        key={drawing.id}
+                        points={drawing.points.map(p => `${p.x * 5.8},${p.y * 3.8}`).join(' ')}
+                        fill="none"
+                        stroke={drawing.color}
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        opacity="0.9"
+                      />
+                    ))}
+
+                    {/* RENDERING ACTIVE DRAG DRAWING IN PROGRESS [1] */}
+                    {currentDrawingPoints.length > 1 && (
+                      <polyline
+                        points={currentDrawingPoints.map(p => `${p.x * 5.8},${p.y * 3.8}`).join(' ')}
+                        fill="none"
+                        stroke={strokeColor}
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        opacity="0.9"
+                      />
+                    )}
+
+                    {/* DIAGRAM LABELS */}
                     {showDiagramLabels && (
                       <g className="transition-opacity duration-300 opacity-95">
                         <style>{`
@@ -1271,7 +1404,12 @@ export const BasketballBoard: React.FC = () => {
                       onPointerUp={e => handleCourtPointerUp(e, player.id)}
                       onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
                       className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
-                      style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
+                      style={{ 
+                        left: `${player.x}%`, 
+                        top: `${player.y}%`, 
+                        transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
+                        pointerEvents: activeTool === 'move' ? 'auto' : 'none' // Disables tokens pointer capture in Draw Mode [1]
+                      }}>
                       <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
                         player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                       } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
@@ -1282,6 +1420,80 @@ export const BasketballBoard: React.FC = () => {
                       </span>
                     </div>
                   ))}
+
+                  {/* 3. DRAWING SIDEBAR OVERLAY (RIGHT SIDE OF THE COURT) */}
+                  {!isViewer && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 p-1.5 bg-slate-900/90 border border-slate-700/50 rounded-xl shadow-2xl z-20 select-none">
+                      {/* Move Tool */}
+                      <button
+                        onClick={() => setActiveTool('move')}
+                        title="Move Players"
+                        className={`p-2 rounded-lg transition-colors ${
+                          activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Move size={16} />
+                      </button>
+
+                      {/* Draw Tool */}
+                      <button
+                        onClick={() => setActiveTool('draw')}
+                        title="Draw Lines"
+                        className={`p-2 rounded-lg transition-colors ${
+                          activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Pencil size={16} />
+                      </button>
+
+                      {/* Erase Tool */}
+                      <button
+                        onClick={() => setActiveTool('erase')}
+                        title="Eraser"
+                        className={`p-2 rounded-lg transition-colors ${
+                          activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Eraser size={16} />
+                      </button>
+
+                      <div className="border-t border-slate-700/50 my-1" />
+
+                      {/* Clear All Drawings */}
+                      <button
+                        onClick={() => {
+                          setDrawings([]);
+                          setCurrentDrawingPoints([]);
+                        }}
+                        title="Clear All Drawings"
+                        className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+
+                      {/* Color Palette (only visible when in Draw mode) */}
+                      {activeTool === 'draw' && (
+                        <>
+                          <div className="border-t border-slate-700/50 my-1" />
+                          <div className="flex flex-col gap-1.5 items-center py-1">
+                            {[
+                              ['#ff4444', 'bg-red-500'],
+                              ['#3b82f6', 'bg-blue-500'],
+                              ['#ffffff', 'bg-white border border-slate-600']
+                            ].map(([colorCode, bgClass]) => (
+                              <button
+                                key={colorCode}
+                                onClick={() => setStrokeColor(colorCode)}
+                                className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
+                                  strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                 </div>
               </div>
