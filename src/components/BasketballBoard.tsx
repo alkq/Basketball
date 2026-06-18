@@ -404,11 +404,14 @@ export const BasketballBoard: React.FC = () => {
         const updatePosition = (prev: Player[]) => prev.map(p => {
           if (activeGroupIds.includes(p.id)) {
             const start = dragStartPositionsRef.current[p.id];
-            return {
-              ...p,
-              x: clamp(start.x + deltaX, 0, 100),
-              y: clamp(start.y + deltaY, 0, 100)
-            };
+            // Protective null-guard prevents TypeError and black/white screen crash [1]
+            if (start) {
+              return {
+                ...p,
+                x: clamp(start.x + deltaX, 0, 100),
+                y: clamp(start.y + deltaY, 0, 100)
+              };
+            }
           }
           return p;
         });
@@ -1046,7 +1049,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
@@ -1500,7 +1503,7 @@ const RosterPanel: React.FC<{
                 } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}
                 `}>
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
-                  isHome ? 'bg-red-900/50' : 'bg-blue-955/50'
+                  isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
                 }`}>
                   <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                 </div>
