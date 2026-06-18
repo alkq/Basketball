@@ -372,7 +372,7 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
 
-  // ── GLOBAL TACTICAL COURT POINTER TRACKING & OVERLAP SWAPPING ──
+  // ── GLOBAL TACTICAL COURT POINTER TRACKING & CONSCIOUS DRAG-AND-DROP ──
   useEffect(() => {
     if (!courtDragId || isViewer) return;
 
@@ -388,53 +388,8 @@ export const BasketballBoard: React.FC = () => {
       setAwayPlayers(upd);
     };
 
-    const handleGlobalPointerUp = (e: PointerEvent) => {
-      const rect = courtRef.current?.getBoundingClientRect();
-      if (!rect) {
-        setCourtDragId(null);
-        dragStartPosRef.current = null;
-        return;
-      }
-
-      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
-
-      const allPlayers = [...homePlayers, ...awayPlayers];
-      const draggedPlayer = allPlayers.find(p => p.id === courtDragId);
-
-      if (draggedPlayer && dragStartPosRef.current) {
-        // Find other players of the same team to see if we dropped on top of them
-        const sameTeamPlayers = draggedPlayer.team === 'home'
-          ? homePlayers.filter(p => p.id !== draggedPlayer.id)
-          : awayPlayers.filter(p => p.id !== draggedPlayer.id);
-
-        let closestPlayer: Player | null = null;
-        let minDist = 99999;
-
-        for (const otherPlayer of sameTeamPlayers) {
-          const dist = Math.sqrt(Math.pow(otherPlayer.x - x, 2) + Math.pow(otherPlayer.y - y, 2));
-          if (dist < minDist) {
-            minDist = dist;
-            closestPlayer = otherPlayer;
-          }
-        }
-
-        // Swap coordinates on tactical board if dropped near another same-team player
-        if (closestPlayer && minDist < 12) {
-          const startPos = dragStartPosRef.current;
-          const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
-          
-          setter(prev => prev.map(p => {
-            if (p.id === draggedPlayer.id) {
-              return { ...p, x: closestPlayer.x, y: closestPlayer.y };
-            }
-            if (p.id === closestPlayer.id) {
-              return { ...p, x: startPos.x, y: startPos.y };
-            }
-            return p;
-          }));
-        }
-      }
+    const handleGlobalPointerUp = () => {
+      // Direct drag and drop: Token stays exactly where released, no automatic swapping or resets
       setCourtDragId(null);
       dragStartPosRef.current = null;
     };
@@ -595,7 +550,7 @@ export const BasketballBoard: React.FC = () => {
     setDraggedId(null);
   }, [draggedId, executeSubstitution, isViewer]);
 
-  // Tactical court drag trigger (Allows active & benched players to be dragged freely)
+  // Tactical court drag trigger (Allows both active and benched player tokens to be dragged)
   const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
     if (isViewer) return;
     e.preventDefault();
@@ -703,7 +658,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('scoreboard')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <LayoutDashboard size={16} /> Scoreboard & Rosters
@@ -711,7 +666,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('court')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-650 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Move size={16} /> Full Tactical Court
@@ -1004,7 +959,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
