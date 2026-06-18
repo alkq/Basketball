@@ -384,6 +384,8 @@ export const BasketballBoard: React.FC = () => {
   // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ── [1]
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
     if (isViewer) return;
+    
+    // Prevent default scroll behaviors specifically when touching player tokens [1]
     e.preventDefault();
     e.stopPropagation();
 
@@ -703,7 +705,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('scoreboard')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-650 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <LayoutDashboard size={16} /> Scoreboard & Rosters
@@ -1112,7 +1114,7 @@ export const BasketballBoard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <Info size={14} className="text-amber-400" />
-                <span>💡 Touch and drag multiple player tokens simultaneously on mobile to move them together.</span>
+                <span>💡 Drag any player token to move them individually. To move multiple players, click to select them first on computer, or touch them simultaneously on mobile.</span>
               </div>
               <div className="flex gap-2">
                 <button
