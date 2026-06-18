@@ -215,7 +215,7 @@ export const BasketballBoard: React.FC = () => {
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // RESTORED SCORESHEET AND SCORERS DERIVATIONS
+  // DERIVED SCORESHEET AND SCORERS VALUES
   const scoresheetMap = useMemo(() => {
     const home: Record<number, { playerNumber: number; playerName: string }> = {};
     const away: Record<number, { playerNumber: number; playerName: string }> = {};
@@ -250,7 +250,7 @@ export const BasketballBoard: React.FC = () => {
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
-  // Substitution execution logic
+  // Substitution execution logic (triggered strictly from Scoreboard/Control Panel)
   const executeSubstitution = useCallback((id1: string, id2: string) => {
     if (id1 === id2 || isViewer) return;
     const allPlayers = [...homePlayers, ...awayPlayers];
@@ -387,7 +387,7 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
 
-  // ── GLOBAL TACTICAL COURT POINTER TRACKING & OVERLAP REPOSITIONING ──
+  // ── GLOBAL TACTICAL COURT POINTER TRACKING ──
   useEffect(() => {
     if (!courtDragId || isViewer) return;
 
@@ -403,60 +403,7 @@ export const BasketballBoard: React.FC = () => {
       setAwayPlayers(upd);
     };
 
-    const handleGlobalPointerUp = (e: PointerEvent) => {
-      const rect = courtRef.current?.getBoundingClientRect();
-      if (!rect) {
-        setCourtDragId(null);
-        return;
-      }
-
-      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
-
-      const allPlayers = [...homePlayers, ...awayPlayers];
-      const draggedPlayer = allPlayers.find(p => p.id === courtDragId);
-
-      if (draggedPlayer) {
-        if (draggedPlayer.status === 'court') {
-          // 1. Dragging an active court player down into their respective bench area box to swap them
-          if (y > 83) {
-            const benchList = draggedPlayer.team === 'home'
-              ? homePlayers.filter(p => p.status === 'bench')
-              : awayPlayers.filter(p => p.status === 'bench');
-
-            if (benchList.length > 0) {
-              executeSubstitution(draggedPlayer.id, benchList[0].id);
-            }
-          }
-        } else if (draggedPlayer.status === 'bench') {
-          // 2. Dragging a benched player onto the court to swap them with the nearest active player
-          if (y <= 83) {
-            const activePlayers = draggedPlayer.team === 'home'
-              ? homePlayers.filter(p => p.status === 'court')
-              : awayPlayers.filter(p => p.status === 'court');
-
-            let closestPlayer: Player | null = null;
-            let minDist = 99999;
-
-            for (const activePlayer of activePlayers) {
-              const dist = Math.sqrt(Math.pow(activePlayer.x - x, 2) + Math.pow(activePlayer.y - y, 2));
-              if (dist < minDist) {
-                minDist = dist;
-                closestPlayer = activePlayer;
-              }
-            }
-
-            // Swap them if dropped close enough to an active player (within 25% threshold)
-            if (closestPlayer && minDist < 25) {
-              executeSubstitution(draggedPlayer.id, closestPlayer.id);
-            } else {
-              resetBenchPositions();
-            }
-          } else {
-            resetBenchPositions();
-          }
-        }
-      }
+    const handleGlobalPointerUp = () => {
       setCourtDragId(null);
     };
 
@@ -467,7 +414,7 @@ export const BasketballBoard: React.FC = () => {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
     };
-  }, [courtDragId, homePlayers, awayPlayers, executeSubstitution, resetBenchPositions, isViewer]);
+  }, [courtDragId, isViewer]);
 
   // ── INDEPENDENT GAME CLOCK LOOP ──
   useEffect(() => {
@@ -620,8 +567,14 @@ export const BasketballBoard: React.FC = () => {
   const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
     if (isViewer) return;
     e.preventDefault();
-    setCourtDragId(id);
-  }, [isViewer]);
+    
+    // Dragging on the tactical board is strictly allowed only for active court players
+    const allPlayers = [...homePlayers, ...awayPlayers];
+    const targetPlayer = allPlayers.find(p => p.id === id);
+    if (targetPlayer && targetPlayer.status === 'court') {
+      setCourtDragId(id);
+    }
+  }, [homePlayers, awayPlayers, isViewer]);
 
   const handleSetTime = useCallback(() => {
     if (isViewer) return;
@@ -1223,6 +1176,7 @@ export const BasketballBoard: React.FC = () => {
                     <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="1.8" />
 
                     {/* BOTTOM SIDE BENCH ZONE GRAPHICS */}
+                    {/* Left coaching/bench area box */}
                     <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
                     {/* Substitution Box */}
                     <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
@@ -1310,15 +1264,13 @@ export const BasketballBoard: React.FC = () => {
                     {homePlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
                       <div
                         key={player.id}
-                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                        onClick={() => handleBenchClick(player.id)}
-                        className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
+                        className="flex flex-col items-center justify-center h-full select-none"
                         style={{ width: '18%' }}
                       >
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-red-600/80 to-red-800/80 border border-white/60 flex items-center justify-center text-[10px] sm:text-xs font-black text-white shadow">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-red-600/40 to-red-800/40 border border-white/30 flex items-center justify-center text-[10px] sm:text-xs font-black text-white/50 shadow-sm">
                           {player.number}
                         </div>
-                        <span className="text-[8px] sm:text-[9px] text-slate-800 font-bold truncate max-w-[32px] leading-none mt-0.5">
+                        <span className="text-[8px] sm:text-[9px] text-slate-800/60 font-bold truncate max-w-[32px] leading-none mt-0.5">
                           {player.name}
                         </span>
                       </div>
@@ -1333,15 +1285,13 @@ export const BasketballBoard: React.FC = () => {
                     {awayPlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
                       <div
                         key={player.id}
-                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                        onClick={() => handleBenchClick(player.id)}
-                        className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
+                        className="flex flex-col items-center justify-center h-full select-none"
                         style={{ width: '18%' }}
                       >
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-blue-600/80 to-blue-800/80 border border-white/60 flex items-center justify-center text-[10px] sm:text-xs font-black text-white shadow">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-blue-600/40 to-blue-800/40 border border-white/30 flex items-center justify-center text-[10px] sm:text-xs font-black text-white/50 shadow-sm">
                           {player.number}
                         </div>
-                        <span className="text-[8px] sm:text-[9px] text-slate-800 font-bold truncate max-w-[32px] leading-none mt-0.5">
+                        <span className="text-[8px] sm:text-[9px] text-slate-800/60 font-bold truncate max-w-[32px] leading-none mt-0.5">
                           {player.name}
                         </span>
                       </div>
@@ -1528,7 +1478,7 @@ const RosterPanel: React.FC<{
                   <span className="text-[10px] text-slate-400 mt-0.5">Fouls: <span className={`font-bold ${p.fouls >= 4 ? 'text-red-400' : isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.fouls}</span></span>
                 </div>
                 <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
-            </div>
+              </div>
             )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
           </div>
         </div>
