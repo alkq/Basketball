@@ -63,11 +63,12 @@ const createHomePlayers = (): Player[] => [
   { id: 'h3', name: 'Vis',   number: 3, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 78 },
   { id: 'h4', name: 'Nan',   number: 4, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 30 },
   { id: 'h5', name: 'Shyong',number: 5, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 70 },
-  { id: 'h6', name: 'Dexter',number: 6, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 15 },
-  { id: 'h7', name: 'Cheng', number: 7, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 30 },
-  { id: 'h8', name: 'Vin',   number: 8, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 45 },
-  { id: 'h9', name: 'Kelvin',number: 9, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 60 },
-  { id: 'h10',name: 'Kenny', number: 10,points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 75 },
+  // Bench players initialized directly inside the bottom-left bench area box
+  { id: 'h6', name: 'Dexter',number: 6, points: 0, fouls: 0, status: 'bench', team: 'home', x: 9.5, y: 91 },
+  { id: 'h7', name: 'Cheng', number: 7, points: 0, fouls: 0, status: 'bench', team: 'home', x: 15.5, y: 91 },
+  { id: 'h8', name: 'Vin',   number: 8, points: 0, fouls: 0, status: 'bench', team: 'home', x: 21.5, y: 91 },
+  { id: 'h9', name: 'Kelvin',number: 9, points: 0, fouls: 0, status: 'bench', team: 'home', x: 27.5, y: 91 },
+  { id: 'h10',name: 'Kenny', number: 10,points: 0, fouls: 0, status: 'bench', team: 'home', x: 33.5, y: 91 },
 ];
 
 const createAwayPlayers = (): Player[] => [
@@ -76,11 +77,12 @@ const createAwayPlayers = (): Player[] => [
   { id: 'a3', name: 'Sheng',   number: 3, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 78 },
   { id: 'a4', name: 'Ping',    number: 4, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 30 },
   { id: 'a5', name: 'Ivan',    number: 5, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 70 },
-  { id: 'a6', name: 'Qian',    number: 6, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 15 },
-  { id: 'a7', name: 'Ren',     number: 7, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 30 },
-  { id: 'a8', name: 'Player 8',number: 8, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 45 },
-  { id: 'a9', name: 'Player 9',number: 9, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 60 },
-  { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 75 },
+  // Bench players initialized directly inside the bottom-right bench area box
+  { id: 'a6', name: 'Qian',    number: 6, points: 0, fouls: 0, status: 'bench', team: 'away', x: 64.5, y: 91 },
+  { id: 'a7', name: 'Ren',     number: 7, points: 0, fouls: 0, status: 'bench', team: 'away', x: 70.5, y: 91 },
+  { id: 'a8', name: 'Player 8',number: 8, points: 0, fouls: 0, status: 'bench', team: 'away', x: 76.5, y: 91 },
+  { id: 'a9', name: 'Player 9',number: 9, points: 0, fouls: 0, status: 'bench', team: 'away', x: 82.5, y: 91 },
+  { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 88.5, y: 91 },
 ];
 
 // ==========================================
@@ -401,38 +403,36 @@ export const BasketballBoard: React.FC = () => {
       const draggedPlayer = allPlayers.find(p => p.id === courtDragId);
 
       if (draggedPlayer && dragStartPosRef.current) {
-        if (draggedPlayer.status === 'court') {
-          // Find other active players of the same team to see if we dropped on top of them
-          const sameTeamActive = draggedPlayer.team === 'home'
-            ? homePlayers.filter(p => p.status === 'court' && p.id !== draggedPlayer.id)
-            : awayPlayers.filter(p => p.status === 'court' && p.id !== draggedPlayer.id);
+        // Find other players of the same team to see if we dropped on top of them
+        const sameTeamPlayers = draggedPlayer.team === 'home'
+          ? homePlayers.filter(p => p.id !== draggedPlayer.id)
+          : awayPlayers.filter(p => p.id !== draggedPlayer.id);
 
-          let closestPlayer: Player | null = null;
-          let minDist = 99999;
+        let closestPlayer: Player | null = null;
+        let minDist = 99999;
 
-          for (const activePlayer of sameTeamActive) {
-            const dist = Math.sqrt(Math.pow(activePlayer.x - x, 2) + Math.pow(activePlayer.y - y, 2));
-            if (dist < minDist) {
-              minDist = dist;
-              closestPlayer = activePlayer;
+        for (const otherPlayer of sameTeamPlayers) {
+          const dist = Math.sqrt(Math.pow(otherPlayer.x - x, 2) + Math.pow(otherPlayer.y - y, 2));
+          if (dist < minDist) {
+            minDist = dist;
+            closestPlayer = otherPlayer;
+          }
+        }
+
+        // Swap coordinates on tactical board if dropped near another same-team player
+        if (closestPlayer && minDist < 12) {
+          const startPos = dragStartPosRef.current;
+          const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
+          
+          setter(prev => prev.map(p => {
+            if (p.id === draggedPlayer.id) {
+              return { ...p, x: closestPlayer.x, y: closestPlayer.y };
             }
-          }
-
-          // If dropped close to another active player of the same team (within 12% threshold), swap their positions
-          if (closestPlayer && minDist < 12) {
-            const startPos = dragStartPosRef.current;
-            const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
-            
-            setter(prev => prev.map(p => {
-              if (p.id === draggedPlayer.id) {
-                return { ...p, x: closestPlayer.x, y: closestPlayer.y };
-              }
-              if (p.id === closestPlayer.id) {
-                return { ...p, x: startPos.x, y: startPos.y };
-              }
-              return p;
-            }));
-          }
+            if (p.id === closestPlayer.id) {
+              return { ...p, x: startPos.x, y: startPos.y };
+            }
+            return p;
+          }));
         }
       }
       setCourtDragId(null);
@@ -595,14 +595,14 @@ export const BasketballBoard: React.FC = () => {
     setDraggedId(null);
   }, [draggedId, executeSubstitution, isViewer]);
 
-  // Tactical court drag trigger (Only allow active court players to be dragged)
+  // Tactical court drag trigger (Allows active & benched players to be dragged freely)
   const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
     if (isViewer) return;
     e.preventDefault();
     
     const allPlayers = [...homePlayers, ...awayPlayers];
     const p = allPlayers.find(pl => pl.id === id);
-    if (p && p.status === 'court') {
+    if (p) {
       setCourtDragId(id);
       dragStartPosRef.current = { x: p.x, y: p.y };
     }
@@ -703,7 +703,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('scoreboard')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <LayoutDashboard size={16} /> Scoreboard & Rosters
@@ -1004,7 +1004,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
@@ -1256,12 +1256,12 @@ export const BasketballBoard: React.FC = () => {
 
                   {/* 2. DRAGGABLE COURT PLAYER TOKENS */}
                   {[
-                    ...homePlayers.filter(p => p.status === 'court' || courtDragId === p.id),
-                    ...awayPlayers.filter(p => p.status === 'court' || courtDragId === p.id)
+                    ...homePlayers,
+                    ...awayPlayers
                   ].map(player => (
                     <div key={player.id}
                       onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
                       style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
                       <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
                         player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
@@ -1273,52 +1273,6 @@ export const BasketballBoard: React.FC = () => {
                       </span>
                     </div>
                   ))}
-
-                  {/* 3. HOME BENCH TOKEN OVERLAYS (LEFT BOX) */}
-                  <div 
-                    className="absolute rounded-lg flex items-center justify-center gap-1.5 p-1 z-10"
-                    style={{ left: '6.9%', width: '31%', top: '85.5%', height: '10.5%' }}
-                  >
-                    {homePlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
-                      <div
-                        key={player.id}
-                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                        onClick={() => handleBenchClick(player.id)}
-                        className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
-                        style={{ width: '18%' }}
-                      >
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-red-600/80 to-red-800/80 border border-white/60 flex items-center justify-center text-[10px] sm:text-xs font-black text-white shadow">
-                          {player.number}
-                        </div>
-                        <span className="text-[8px] sm:text-[9px] text-slate-800 font-bold truncate max-w-[32px] leading-none mt-0.5">
-                          {player.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 4. AWAY BENCH TOKEN OVERLAYS (RIGHT BOX) */}
-                  <div 
-                    className="absolute rounded-lg flex items-center justify-center gap-1.5 p-1 z-10"
-                    style={{ left: '62.1%', width: '31%', top: '85.5%', height: '10.5%' }}
-                  >
-                    {awayPlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
-                      <div
-                        key={player.id}
-                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                        onClick={() => handleBenchClick(player.id)}
-                        className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
-                        style={{ width: '18%' }}
-                      >
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-blue-600/80 to-blue-800/80 border border-white/60 flex items-center justify-center text-[10px] sm:text-xs font-black text-white shadow">
-                          {player.number}
-                        </div>
-                        <span className="text-[8px] sm:text-[9px] text-slate-800 font-bold truncate max-w-[32px] leading-none mt-0.5">
-                          {player.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
 
                 </div>
               </div>
