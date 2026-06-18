@@ -237,6 +237,11 @@ export const BasketballBoard: React.FC = () => {
     }));
   }, [homePlayers, awayPlayers, isViewer]);
 
+  // Find benched player currently being dragged on the tactical board
+  const draggingBenchPlayer = useMemo(() => {
+    return [...homePlayers, ...awayPlayers].find(p => p.status === 'bench' && courtDragId === p.id);
+  }, [homePlayers, awayPlayers, courtDragId]);
+
   // ── LOCAL BROADCAST CHANNEL ──
   useEffect(() => {
     try {
@@ -355,17 +360,36 @@ export const BasketballBoard: React.FC = () => {
 
     const handleGlobalPointerUp = () => {
       if (courtDragId) {
-        // Dragging a player token down past 83% Y drops them to the bench
         const allPlayers = [...homePlayers, ...awayPlayers];
-        const activeDragged = allPlayers.find(p => p.id === courtDragId);
+        const draggedPlayer = allPlayers.find(p => p.id === courtDragId);
         
-        if (activeDragged && activeDragged.status === 'court' && activeDragged.y > 83) {
-          const benchList = activeDragged.team === 'home'
-            ? homePlayers.filter(p => p.status === 'bench')
-            : awayPlayers.filter(p => p.status === 'bench');
+        if (draggedPlayer) {
+          if (draggedPlayer.status === 'court') {
+            // Case 1: Active Court player dragged down into the Bench Area (Y > 83)
+            if (draggedPlayer.y > 83) {
+              const benchList = draggedPlayer.team === 'home'
+                ? homePlayers.filter(p => p.status === 'bench')
+                : awayPlayers.filter(p => p.status === 'bench');
+                
+              if (benchList.length > 0) {
+                executeSubstitution(draggedPlayer.id, benchList[0].id);
+              }
+            }
+          } else if (draggedPlayer.status === 'bench') {
+            // Case 2: Bench player dragged out of the bench area and dropped onto an active court player
+            const activeTeamPlayers = draggedPlayer.team === 'home'
+              ? homePlayers.filter(p => p.status === 'court')
+              : awayPlayers.filter(p => p.status === 'court');
+              
+            const targetPlayer = activeTeamPlayers.find(p => {
+              const dx = p.x - draggedPlayer.x;
+              const dy = p.y - draggedPlayer.y;
+              return Math.sqrt(dx * dx + dy * dy) < 8; // threshold of 8% distance
+            });
             
-          if (benchList.length > 0) {
-            executeSubstitution(activeDragged.id, benchList[0].id);
+            if (targetPlayer) {
+              executeSubstitution(draggedPlayer.id, targetPlayer.id);
+            }
           }
         }
       }
@@ -1227,22 +1251,13 @@ export const BasketballBoard: React.FC = () => {
                   </svg>
 
                   {/* 2. DRAGGABLE COURT PLAYER TOKENS */}
-                  {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
+                  {[
+                    ...homePlayers.filter(p => p.status === 'court'), 
+                    ...awayPlayers.filter(p => p.status === 'court'),
+                    ...(draggingBenchPlayer ? [draggingBenchPlayer] : [])
+                  ].map(player => (
                     <div key={player.id}
                       onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                      draggable={!isViewer}
-                      onDragStart={e => {
-                        e.dataTransfer.effectAllowed = 'move';
-                        setDraggedId(player.id);
-                      }}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={e => {
-                        e.preventDefault();
-                        if (draggedId) {
-                          executeSubstitution(draggedId, player.id);
-                          setDraggedId(null);
-                        }
-                      }}
                       className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                       style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
                       <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
@@ -1261,22 +1276,10 @@ export const BasketballBoard: React.FC = () => {
                     className="absolute rounded-lg flex items-center justify-center gap-1.5 p-1 z-10"
                     style={{ left: '6.9%', width: '31%', top: '85.5%', height: '10.5%' }}
                   >
-                    {homePlayers.filter(p => p.status === 'bench').map(player => (
+                    {homePlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
                       <div
                         key={player.id}
-                        draggable={!isViewer}
-                        onDragStart={e => {
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDraggedId(player.id);
-                        }}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={e => {
-                          e.preventDefault();
-                          if (draggedId) {
-                            executeSubstitution(draggedId, player.id);
-                            setDraggedId(null);
-                          }
-                        }}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
                         onClick={() => handleBenchClick(player.id)}
                         className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
                         style={{ width: '18%' }}
@@ -1296,22 +1299,10 @@ export const BasketballBoard: React.FC = () => {
                     className="absolute rounded-lg flex items-center justify-center gap-1.5 p-1 z-10"
                     style={{ left: '62.1%', width: '31%', top: '85.5%', height: '10.5%' }}
                   >
-                    {awayPlayers.filter(p => p.status === 'bench').map(player => (
+                    {awayPlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
                       <div
                         key={player.id}
-                        draggable={!isViewer}
-                        onDragStart={e => {
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDraggedId(player.id);
-                        }}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={e => {
-                          e.preventDefault();
-                          if (draggedId) {
-                            executeSubstitution(draggedId, player.id);
-                            setDraggedId(null);
-                          }
-                        }}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
                         onClick={() => handleBenchClick(player.id)}
                         className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
                         style={{ width: '18%' }}
