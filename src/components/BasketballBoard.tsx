@@ -189,10 +189,9 @@ export const BasketballBoard: React.FC = () => {
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
   const [showDiagramLabels, setShowDiagramLabels] = useState(false);
-
-  // Multi-Select Tactical Court States
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  
+  // Tactical Board Selection List for Multi-Drag
+  const [selectedTacticalIds, setSelectedTacticalIds] = useState<string[]>([]);
   
   // Timer sync helper key to reset only the shot clock active interval
   const [timerResetKey, setTimerResetKey] = useState(0);
@@ -209,11 +208,10 @@ export const BasketballBoard: React.FC = () => {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
-  // Tactical court drag state
+  // Tactical court drag states
   const [courtDragId, setCourtDragId] = useState<string | null>(null);
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
-  const groupDragStartPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
-  const pointerStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const dragStartPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const courtRef = useRef<HTMLDivElement>(null);
 
   const isViewer = mode === 'viewer';
@@ -378,42 +376,38 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
 
-  // ── GLOBAL TACTICAL COURT POINTER TRACKING & CONSCIOUS DRAG-AND-DROP (With Multi-Select Offset Support) ──
+  // ── GLOBAL TACTICAL COURT POINTER TRACKING & GROUP DRAGGING ──
   useEffect(() => {
     if (!courtDragId || isViewer) return;
 
     const handleGlobalPointerMove = (e: PointerEvent) => {
       const rect = courtRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      if (!rect || !courtDragId) return;
 
-      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
+      const currentX = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
+      const currentY = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
 
-      if (isMultiSelectMode && selectedPlayerIds.includes(courtDragId)) {
-        // Group dragging based on starting coordinates offset
-        const startPointer = pointerStartPosRef.current;
-        if (!startPointer) return;
+      if (dragStartPosRef.current) {
+        const deltaX = currentX - dragStartPosRef.current.x;
+        const deltaY = currentY - dragStartPosRef.current.y;
 
-        const dx = x - startPointer.x;
-        const dy = y - startPointer.y;
+        // Move all players in the active group together by the delta offset
+        const activeGroupIds = Object.keys(dragStartPositionsRef.current);
 
-        const applyOffset = (prev: Player[]) => prev.map(p => {
-          if (selectedPlayerIds.includes(p.id)) {
-            const startPos = groupDragStartPositionsRef.current[p.id];
-            if (startPos) {
-              return { ...p, x: clamp(startPos.x + dx, 0, 100), y: clamp(startPos.y + dy, 0, 100) };
-            }
+        const updatePosition = (prev: Player[]) => prev.map(p => {
+          if (activeGroupIds.includes(p.id)) {
+            const start = dragStartPositionsRef.current[p.id];
+            return {
+              ...p,
+              x: clamp(start.x + deltaX, 0, 100),
+              y: clamp(start.y + deltaY, 0, 100)
+            };
           }
           return p;
         });
 
-        setHomePlayers(applyOffset);
-        setAwayPlayers(applyOffset);
-      } else {
-        // Standard single player drag
-        const upd = (prev: Player[]) => prev.map(p => p.id === courtDragId ? { ...p, x, y } : p);
-        setHomePlayers(upd);
-        setAwayPlayers(upd);
+        setHomePlayers(updatePosition);
+        setAwayPlayers(updatePosition);
       }
     };
 
@@ -421,43 +415,30 @@ export const BasketballBoard: React.FC = () => {
       if (!courtDragId) return;
 
       const rect = courtRef.current?.getBoundingClientRect();
-      if (!rect) {
-        setCourtDragId(null);
-        dragStartPosRef.current = null;
-        pointerStartPosRef.current = null;
-        return;
-      }
+      if (rect && dragStartPosRef.current) {
+        const endX = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
+        const endY = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
 
-      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
+        const distMoved = Math.sqrt(
+          Math.pow(endX - dragStartPosRef.current.x, 2) + 
+          Math.pow(endY - dragStartPosRef.current.y, 2)
+        );
 
-      const startPointer = pointerStartPosRef.current;
-      if (startPointer) {
-        const dragDist = Math.sqrt(Math.pow(x - startPointer.x, 2) + Math.pow(y - startPointer.y, 2));
-        
-        // Tap/click detection threshold
-        if (dragDist < 1.5) {
-          if (isMultiSelectMode) {
-            setSelectedPlayerIds(prev => 
-              prev.includes(courtDragId)
-                ? prev.filter(id => id !== courtDragId)
-                : [...prev, courtDragId]
-            );
-            
-            // Restore token coordinates slightly to prevent fine motor finger shifts from sliding them
-            const orig = groupDragStartPositionsRef.current[courtDragId] || dragStartPosRef.current;
-            if (orig) {
-              const restore = (prev: Player[]) => prev.map(p => p.id === courtDragId ? { ...p, x: orig.x, y: orig.y } : p);
-              setHomePlayers(restore);
-              setAwayPlayers(restore);
+        // Click detection: If moved less than 1.5% of court width, toggle player select
+        if (distMoved < 1.5) {
+          setSelectedTacticalIds(prev => {
+            if (prev.includes(courtDragId)) {
+              return prev.filter(id => id !== courtDragId);
+            } else {
+              return [...prev, courtDragId];
             }
-          }
+          });
         }
       }
 
       setCourtDragId(null);
       dragStartPosRef.current = null;
-      pointerStartPosRef.current = null;
+      dragStartPositionsRef.current = {};
     };
 
     window.addEventListener('pointermove', handleGlobalPointerMove);
@@ -467,7 +448,7 @@ export const BasketballBoard: React.FC = () => {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
     };
-  }, [courtDragId, homePlayers, awayPlayers, isViewer, isMultiSelectMode, selectedPlayerIds]);
+  }, [courtDragId, homePlayers, awayPlayers, isViewer]);
 
   // ── INDEPENDENT GAME CLOCK LOOP ──
   useEffect(() => {
@@ -574,7 +555,7 @@ export const BasketballBoard: React.FC = () => {
     setPeriod(1);
     setGameEvents([]);
     setSelectedCourtId(null);
-    setSelectedPlayerIds([]);
+    setSelectedTacticalIds([]);
   }, [isViewer]);
 
   const renamePlayer = useCallback((team: 'home' | 'away', id: string, name: string) => {
@@ -617,50 +598,34 @@ export const BasketballBoard: React.FC = () => {
     setDraggedId(null);
   }, [draggedId, executeSubstitution, isViewer]);
 
-  // Tactical court drag trigger (Captures selection arrays & offsets for multi-select group moves)
+  // Tactical court drag trigger (Allows active & benched player tokens to be dragged)
   const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
     if (isViewer) return;
     e.preventDefault();
     
+    setCourtDragId(id);
+
+    const rect = courtRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const startX = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
+    const startY = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
+
+    dragStartPosRef.current = { x: startX, y: startY };
+
+    // Record the start coordinates for all selected tokens
     const allPlayers = [...homePlayers, ...awayPlayers];
-    const p = allPlayers.find(pl => pl.id === id);
-    if (!p) return;
+    const dragGroup = selectedTacticalIds.includes(id) ? selectedTacticalIds : [id];
 
-    if (isMultiSelectMode) {
-      // Toggle selection on tap, or hold group positions for dragging
-      const nextSelection = selectedPlayerIds.includes(id) 
-        ? selectedPlayerIds 
-        : [...selectedPlayerIds, id];
-        
-      setCourtDragId(id);
-      
-      const rect = courtRef.current?.getBoundingClientRect();
-      if (rect) {
-        const startX = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-        const startY = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
-        pointerStartPosRef.current = { x: startX, y: startY };
-      }
-
-      const startPositions: Record<string, { x: number; y: number }> = {};
-      for (const selId of nextSelection) {
-        const selPl = allPlayers.find(pl => pl.id === selId);
-        if (selPl) {
-          startPositions[selId] = { x: selPl.x, y: selPl.y };
-        }
-      }
-      groupDragStartPositionsRef.current = startPositions;
-    } else {
-      setCourtDragId(id);
-      dragStartPosRef.current = { x: p.x, y: p.y };
-      
-      const rect = courtRef.current?.getBoundingClientRect();
-      if (rect) {
-        const startX = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-        const startY = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
-        pointerStartPosRef.current = { x: startX, y: startY };
+    const startPosMap: Record<string, { x: number; y: number }> = {};
+    for (const pid of dragGroup) {
+      const p = allPlayers.find(pl => pl.id === pid);
+      if (p) {
+        startPosMap[pid] = { x: p.x, y: p.y };
       }
     }
-  }, [homePlayers, awayPlayers, isViewer, isMultiSelectMode, selectedPlayerIds]);
+    dragStartPositionsRef.current = startPosMap;
+  }, [homePlayers, awayPlayers, selectedTacticalIds, isViewer]);
 
   const handleSetTime = useCallback(() => {
     if (isViewer) return;
@@ -675,20 +640,6 @@ export const BasketballBoard: React.FC = () => {
     if (isViewer) return;
     setShotClock(seconds);
     setTimerResetKey(k => k + 1); // Triggers shot-clock only interval to clear and start a fresh 1-second countdown
-  };
-
-  const handleToggleMultiSelect = () => {
-    setIsMultiSelectMode(prev => {
-      const next = !prev;
-      if (!next) {
-        setSelectedPlayerIds([]); // Clear selection when toggling off
-      }
-      return next;
-    });
-  };
-
-  const handleClearSelection = () => {
-    setSelectedPlayerIds([]);
   };
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
@@ -779,7 +730,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('court')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-650 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Move size={16} /> Full Tactical Court
@@ -1072,7 +1023,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
@@ -1177,34 +1128,20 @@ export const BasketballBoard: React.FC = () => {
             </div>
 
             {/* ACTION ROW */}
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <div className="flex items-center gap-2 text-xs text-slate-400 mr-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
                 <Info size={14} className="text-amber-400" />
-                <span>Drag court tokens to place them in precise tactical alignments.</span>
+                <span>💡 Click multiple player tokens to select a group, then drag any of them to move them together.</span>
               </div>
-              
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={handleToggleMultiSelect}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow ${
-                    isMultiSelectMode 
-                      ? 'bg-emerald-500 text-slate-900 border-emerald-400' 
-                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
-                  }`}
-                >
-                  <ArrowRightLeft size={12} />
-                  {isMultiSelectMode ? 'Multi-Select On' : 'Multi-Select Mode'}
-                </button>
-                
-                {selectedPlayerIds.length > 0 && (
+              <div className="flex gap-2">
+                {selectedTacticalIds.length > 0 && (
                   <button
-                    onClick={handleClearSelection}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-900/50 hover:bg-rose-900 text-rose-200 border border-rose-700 transition-all shadow"
+                    onClick={() => setSelectedTacticalIds([])}
+                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-xs font-bold text-white shadow-md active:scale-95 transition-all"
                   >
-                    Clear Group ({selectedPlayerIds.length})
+                    Clear Selection ({selectedTacticalIds.length})
                   </button>
                 )}
-
                 <button
                   onClick={() => setShowDiagramLabels(prev => !prev)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow ${
@@ -1346,12 +1283,12 @@ export const BasketballBoard: React.FC = () => {
                     )}
                   </svg>
 
-                  {/* 2. DRAGGABLE COURT & BENCH PLAYER TOKENS */}
+                  {/* 2. DRAGGABLE COURT PLAYER TOKENS */}
                   {[
                     ...homePlayers,
                     ...awayPlayers
                   ].map(player => {
-                    const isSelected = selectedPlayerIds.includes(player.id);
+                    const isSelected = selectedTacticalIds.includes(player.id);
                     return (
                       <div key={player.id}
                         onPointerDown={e => handleCourtPointerDown(e, player.id)}
@@ -1359,7 +1296,7 @@ export const BasketballBoard: React.FC = () => {
                         style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
                         <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
                           player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                        } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${isSelected ? 'ring-4 ring-emerald-400 animate-pulse scale-105' : selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
+                        } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''} ${isSelected ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`}>
                           {player.number}
                         </div>
                         <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
