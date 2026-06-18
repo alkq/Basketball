@@ -215,6 +215,38 @@ export const BasketballBoard: React.FC = () => {
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
+  // RESTORED SCORESHEET AND SCORERS DERIVATIONS
+  const scoresheetMap = useMemo(() => {
+    const home: Record<number, { playerNumber: number; playerName: string }> = {};
+    const away: Record<number, { playerNumber: number; playerName: string }> = {};
+    let homeTotal = 0;
+    let awayTotal = 0;
+    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    for (const ev of events) {
+      if (!ev.value || ev.value <= 0) continue;
+      if (ev.team === 'home') {
+        homeTotal += ev.value;
+        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      } else {
+        awayTotal += ev.value;
+        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
+      }
+    }
+    return { home, away };
+  }, [gameEvents]);
+
+  const maxSheetRows = Math.max(homeScore, awayScore, 20);
+
+  const homeScorers = useMemo(() =>
+    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [homePlayers]
+  );
+
+  const awayScorers = useMemo(() =>
+    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [awayPlayers]
+  );
+
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
@@ -236,6 +268,24 @@ export const BasketballBoard: React.FC = () => {
       return p;
     }));
   }, [homePlayers, awayPlayers, isViewer]);
+
+  // Clean alignment resets for benched players when returned to bench
+  const resetBenchPositions = useCallback(() => {
+    setHomePlayers(prev => prev.map(p => {
+      if (p.status === 'bench') {
+        const idx = prev.filter(pl => pl.status === 'bench').indexOf(p);
+        return { ...p, x: 3, y: 15 + (idx >= 0 ? idx * 15 : 0) };
+      }
+      return p;
+    }));
+    setAwayPlayers(prev => prev.map(p => {
+      if (p.status === 'bench') {
+        const idx = prev.filter(pl => pl.status === 'bench').indexOf(p);
+        return { ...p, x: 97, y: 15 + (idx >= 0 ? idx * 15 : 0) };
+      }
+      return p;
+    }));
+  }, []);
 
   // ── LOCAL BROADCAST CHANNEL ──
   useEffect(() => {
@@ -337,7 +387,7 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled]);
 
-  // ── GLOBAL TACTICAL COURT POINTER TRACKING ──
+  // ── GLOBAL TACTICAL COURT POINTER TRACKING & OVERLAP REPOSITIONING ──
   useEffect(() => {
     if (!courtDragId || isViewer) return;
 
@@ -353,19 +403,57 @@ export const BasketballBoard: React.FC = () => {
       setAwayPlayers(upd);
     };
 
-    const handleGlobalPointerUp = () => {
-      if (courtDragId) {
-        // Dragging a player token down past 83% Y drops them to the bench
-        const allPlayers = [...homePlayers, ...awayPlayers];
-        const activeDragged = allPlayers.find(p => p.id === courtDragId);
-        
-        if (activeDragged && activeDragged.status === 'court' && activeDragged.y > 83) {
-          const benchList = activeDragged.team === 'home'
-            ? homePlayers.filter(p => p.status === 'bench')
-            : awayPlayers.filter(p => p.status === 'bench');
-            
-          if (benchList.length > 0) {
-            executeSubstitution(activeDragged.id, benchList[0].id);
+    const handleGlobalPointerUp = (e: PointerEvent) => {
+      const rect = courtRef.current?.getBoundingClientRect();
+      if (!rect) {
+        setCourtDragId(null);
+        return;
+      }
+
+      const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
+      const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
+
+      const allPlayers = [...homePlayers, ...awayPlayers];
+      const draggedPlayer = allPlayers.find(p => p.id === courtDragId);
+
+      if (draggedPlayer) {
+        if (draggedPlayer.status === 'court') {
+          // 1. Dragging an active court player down into their respective bench area box to swap them
+          if (y > 83) {
+            const benchList = draggedPlayer.team === 'home'
+              ? homePlayers.filter(p => p.status === 'bench')
+              : awayPlayers.filter(p => p.status === 'bench');
+
+            if (benchList.length > 0) {
+              executeSubstitution(draggedPlayer.id, benchList[0].id);
+            }
+          }
+        } else if (draggedPlayer.status === 'bench') {
+          // 2. Dragging a benched player onto the court to swap them with the nearest active player
+          if (y <= 83) {
+            const activePlayers = draggedPlayer.team === 'home'
+              ? homePlayers.filter(p => p.status === 'court')
+              : awayPlayers.filter(p => p.status === 'court');
+
+            let closestPlayer: Player | null = null;
+            let minDist = 99999;
+
+            for (const activePlayer of activePlayers) {
+              const dist = Math.sqrt(Math.pow(activePlayer.x - x, 2) + Math.pow(activePlayer.y - y, 2));
+              if (dist < minDist) {
+                minDist = dist;
+                closestPlayer = activePlayer;
+              }
+            }
+
+            // Swap them if dropped close enough to an active player (within 25% threshold)
+            if (closestPlayer && minDist < 25) {
+              executeSubstitution(draggedPlayer.id, closestPlayer.id);
+            } else {
+              resetBenchPositions();
+            }
+          } else {
+            resetBenchPositions();
           }
         }
       }
@@ -379,7 +467,7 @@ export const BasketballBoard: React.FC = () => {
       window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
     };
-  }, [courtDragId, homePlayers, awayPlayers, executeSubstitution, isViewer]);
+  }, [courtDragId, homePlayers, awayPlayers, executeSubstitution, resetBenchPositions, isViewer]);
 
   // ── INDEPENDENT GAME CLOCK LOOP ──
   useEffect(() => {
@@ -404,37 +492,6 @@ export const BasketballBoard: React.FC = () => {
     }, 1000);
     return () => clearInterval(t);
   }, [isRunning, timerResetKey]);
-
-  // Scoresheet map
-  const scoresheetMap = useMemo(() => {
-    const home: Record<number, { playerNumber: number; playerName: string }> = {};
-    const away: Record<number, { playerNumber: number; playerName: string }> = {};
-    let homeTotal = 0;
-    let awayTotal = 0;
-    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    for (const ev of events) {
-      if (!ev.value || ev.value <= 0) continue;
-      if (ev.team === 'home') {
-        homeTotal += ev.value;
-        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      } else {
-        awayTotal += ev.value;
-        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
-      }
-    }
-    return { home, away };
-  }, [gameEvents]);
-
-  const maxSheetRows = Math.max(homeScore, awayScore, 20);
-
-  const homeScorers = useMemo(() =>
-    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [homePlayers]
-  );
-  const awayScorers = useMemo(() =>
-    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
-    [awayPlayers]
-  );
 
   // Point scoring actions
   const addPoints = useCallback((team: 'home' | 'away', courtIndex: number, pts: number) => {
@@ -975,7 +1032,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
@@ -1166,7 +1223,6 @@ export const BasketballBoard: React.FC = () => {
                     <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="1.8" />
 
                     {/* BOTTOM SIDE BENCH ZONE GRAPHICS */}
-                    {/* Left coaching/bench area box */}
                     <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
                     {/* Substitution Box */}
                     <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
@@ -1227,22 +1283,12 @@ export const BasketballBoard: React.FC = () => {
                   </svg>
 
                   {/* 2. DRAGGABLE COURT PLAYER TOKENS */}
-                  {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
+                  {[
+                    ...homePlayers.filter(p => p.status === 'court' || courtDragId === p.id),
+                    ...awayPlayers.filter(p => p.status === 'court' || courtDragId === p.id)
+                  ].map(player => (
                     <div key={player.id}
                       onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                      draggable={!isViewer}
-                      onDragStart={e => {
-                        e.dataTransfer.effectAllowed = 'move';
-                        setDraggedId(player.id);
-                      }}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={e => {
-                        e.preventDefault();
-                        if (draggedId) {
-                          executeSubstitution(draggedId, player.id);
-                          setDraggedId(null);
-                        }
-                      }}
                       className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                       style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
                       <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
@@ -1261,22 +1307,10 @@ export const BasketballBoard: React.FC = () => {
                     className="absolute rounded-lg flex items-center justify-center gap-1.5 p-1 z-10"
                     style={{ left: '6.9%', width: '31%', top: '85.5%', height: '10.5%' }}
                   >
-                    {homePlayers.filter(p => p.status === 'bench').map(player => (
+                    {homePlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
                       <div
                         key={player.id}
-                        draggable={!isViewer}
-                        onDragStart={e => {
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDraggedId(player.id);
-                        }}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={e => {
-                          e.preventDefault();
-                          if (draggedId) {
-                            executeSubstitution(draggedId, player.id);
-                            setDraggedId(null);
-                          }
-                        }}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
                         onClick={() => handleBenchClick(player.id)}
                         className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
                         style={{ width: '18%' }}
@@ -1296,22 +1330,10 @@ export const BasketballBoard: React.FC = () => {
                     className="absolute rounded-lg flex items-center justify-center gap-1.5 p-1 z-10"
                     style={{ left: '62.1%', width: '31%', top: '85.5%', height: '10.5%' }}
                   >
-                    {awayPlayers.filter(p => p.status === 'bench').map(player => (
+                    {awayPlayers.filter(p => p.status === 'bench' && courtDragId !== p.id).map(player => (
                       <div
                         key={player.id}
-                        draggable={!isViewer}
-                        onDragStart={e => {
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDraggedId(player.id);
-                        }}
-                        onDragOver={e => e.preventDefault()}
-                        onDrop={e => {
-                          e.preventDefault();
-                          if (draggedId) {
-                            executeSubstitution(draggedId, player.id);
-                            setDraggedId(null);
-                          }
-                        }}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
                         onClick={() => handleBenchClick(player.id)}
                         className={`flex flex-col items-center justify-center h-full transition-all select-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing hover:scale-105'}`}
                         style={{ width: '18%' }}
@@ -1480,7 +1502,7 @@ const RosterPanel: React.FC<{
                 } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}
                 `}>
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
-                  isHome ? 'bg-red-900/50' : 'bg-blue-900/50'
+                  isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
                 }`}>
                   <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                 </div>
