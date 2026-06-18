@@ -206,10 +206,12 @@ export const BasketballBoard: React.FC = () => {
   
   // Tactical Board State & Drawing Systems [1]
   const [activeTool, setActiveTool] = useState<'move' | 'draw' | 'erase'>('move');
-  const [drawings, setDrawings] = useState<{ id: string; points: { x: number; y: number }[]; color: string }[]>([]);
+  const [drawings, setDrawings] = useState<{ id: string; points: { x: number; y: number }[]; color: string; width: number }[]>([]);
   const [currentDrawingPoints, setCurrentDrawingPoints] = useState<{ x: number; y: number }[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokeColor, setStrokeColor] = useState('#ff4444');
+  const [penSize, setPenSize] = useState<number>(4);
+  const [eraserSize, setEraserSize] = useState<number>(8);
   
   // Multi-Touch Pointer Drag Tracking Refs [1]
   const activeDragsRef = useRef<Record<number, { 
@@ -237,9 +239,16 @@ export const BasketballBoard: React.FC = () => {
 
   // Tactical court drag states
   const [courtDragId, setCourtDragId] = useState<string | null>(null);
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const courtRef = useRef<HTMLDivElement>(null);
 
   const isViewer = mode === 'viewer';
+
+  // SSR-Safe Mobile Device Touch Detection
+  const isMobileDevice = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
 
   // ── DERIVED VALUES ──
   const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
@@ -540,7 +549,8 @@ export const BasketballBoard: React.FC = () => {
         {
           id: uid(),
           points: currentDrawingPoints,
-          color: strokeColor
+          color: strokeColor,
+          width: penSize // Stores the customizable line size [1]
         }
       ]);
     }
@@ -553,7 +563,8 @@ export const BasketballBoard: React.FC = () => {
     setDrawings(prev => {
       return prev.filter(drawing => {
         const pts = drawing.points;
-        const threshold = 3.5; // Erase sensitivity radius (3.5% of court width)
+        // Eraser threshold sensitivity is dynamically based on custom eraserSize [1]
+        const threshold = eraserSize; 
         for (let i = 0; i < pts.length - 1; i++) {
           const dist = getPointToSegmentDistance(ex, ey, pts[i].x, pts[i].y, pts[i+1].x, pts[i+1].y);
           if (dist < threshold) {
@@ -807,7 +818,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('scoreboard')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-650 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <LayoutDashboard size={16} /> Scoreboard & Rosters
@@ -897,7 +908,7 @@ export const BasketballBoard: React.FC = () => {
 
             {/* Scoreboard Banner */}
             <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-slate-700/50">
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-900/20 via-slate-800 to-blue-900/20 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-950/20 via-slate-800 to-blue-900/20 pointer-events-none" />
               <div className="relative grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {/* Home Team Display */}
                 <div className="flex flex-col items-center justify-center py-3 sm:py-5 border-r border-slate-700/40 bg-gradient-to-b from-orange-950/30 to-transparent">
@@ -1100,7 +1111,7 @@ export const BasketballBoard: React.FC = () => {
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-amber-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
-                        </div>
+                          </div>
                       )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
                   </div>
@@ -1112,7 +1123,7 @@ export const BasketballBoard: React.FC = () => {
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
-                        </div>
+                          </div>
                       )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
                   </div>
@@ -1241,7 +1252,7 @@ export const BasketballBoard: React.FC = () => {
                   onPointerUp={handleCourtBgPointerUp}
                   onPointerCancel={handleCourtBgPointerUp}
                   className={`min-w-[560px] md:min-w-0 relative aspect-[58/38] w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
-                    courtDragId || isDrawing ? 'touch-none' : 'touch-auto'
+                    courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'
                   }`}
                   style={{ backgroundColor: '#fdd2ab' }}
                 >
