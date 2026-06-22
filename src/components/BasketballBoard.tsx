@@ -30,8 +30,8 @@ export interface Player {
   fouls: number;
   status: 'court' | 'bench';
   team: 'home' | 'away';
-  x: number;
-  y: number;
+  x: number; // Position along the court's long axis (0 - 100)
+  y: number; // Position along the court's short axis (0 - 100)
 }
 
 interface GameEvent {
@@ -136,7 +136,6 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 
 const uid = () => Math.random().toString(36).slice(2);
 
-// Point-to-segment distance algorithm for relative coordinate erasure [1]
 const getPointToSegmentDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -150,32 +149,33 @@ const getPointToSegmentDistance = (px: number, py: number, x1: number, y1: numbe
   return Math.sqrt(Math.pow(px - closestX, 2) + Math.pow(py - closestY, 2));
 };
 
+// Default setup with coordinates aligned to screenshot
 const createHomePlayers = (): Player[] => [
-  { id: 'h1', name: 'Kwong', number: 1, points: 0, fouls: 0, status: 'court', team: 'home', x: 35, y: 45 },
-  { id: 'h2', name: 'Hua',   number: 2, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 22 },
-  { id: 'h3', name: 'Vis',   number: 3, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 78 },
+  { id: 'h1', name: 'Kwong', number: 1, points: 0, fouls: 0, status: 'court', team: 'home', x: 35, y: 50 },
+  { id: 'h2', name: 'Hua',   number: 2, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 25 },
+  { id: 'h3', name: 'Vis',   number: 3, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 75 },
   { id: 'h4', name: 'Nan',   number: 4, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 30 },
   { id: 'h5', name: 'Shyong',number: 5, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 70 },
-  // Bench players initialized directly inside the bottom-left bench area box
-  { id: 'h6', name: 'Dexter',number: 6, points: 0, fouls: 0, status: 'bench', team: 'home', x: 9.5, y: 91 },
-  { id: 'h7', name: 'Cheng', number: 7, points: 0, fouls: 0, status: 'bench', team: 'home', x: 15.5, y: 91 },
-  { id: 'h8', name: 'Vin',   number: 8, points: 0, fouls: 0, status: 'bench', team: 'home', x: 21.5, y: 91 },
-  { id: 'h9', name: 'Kelvin',number: 9, points: 0, fouls: 0, status: 'bench', team: 'home', x: 27.5, y: 91 },
-  { id: 'h10',name: 'Kenny', number: 10,points: 0, fouls: 0, status: 'bench', team: 'home', x: 33.5, y: 91 },
+  // Bench players aligned in a vertical column along the right sideline in Vertical View
+  { id: 'h6', name: 'Dexter',number: 6, points: 0, fouls: 0, status: 'bench', team: 'home', x: 10, y: 92 },
+  { id: 'h7', name: 'Cheng', number: 7, points: 0, fouls: 0, status: 'bench', team: 'home', x: 18, y: 92 },
+  { id: 'h8', name: 'Vin',   number: 8, points: 0, fouls: 0, status: 'bench', team: 'home', x: 26, y: 92 },
+  { id: 'h9', name: 'Kelvin',number: 9, points: 0, fouls: 0, status: 'bench', team: 'home', x: 34, y: 92 },
+  { id: 'h10',name: 'Kenny', number: 10,points: 0, fouls: 0, status: 'bench', team: 'home', x: 42, y: 92 },
 ];
 
 const createAwayPlayers = (): Player[] => [
-  { id: 'a1', name: 'Fu',      number: 1, points: 0, fouls: 0, status: 'court', team: 'away', x: 65, y: 45 },
-  { id: 'a2', name: 'Ci',      number: 2, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 22 },
-  { id: 'a3', name: 'Sheng',   number: 3, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 78 },
+  { id: 'a1', name: 'Fu',      number: 1, points: 0, fouls: 0, status: 'court', team: 'away', x: 65, y: 50 },
+  { id: 'a2', name: 'Ci',      number: 2, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 25 },
+  { id: 'a3', name: 'Sheng',   number: 3, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 75 },
   { id: 'a4', name: 'Ping',    number: 4, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 30 },
   { id: 'a5', name: 'Ivan',    number: 5, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 70 },
-  // Bench players initialized directly inside the bottom-right bench area box
-  { id: 'a6', name: 'Qian',    number: 6, points: 0, fouls: 0, status: 'bench', team: 'away', x: 64.5, y: 91 },
-  { id: 'a7', name: 'Ren',     number: 7, points: 0, fouls: 0, status: 'bench', team: 'away', x: 70.5, y: 91 },
-  { id: 'a8', name: 'Player 8',number: 8, points: 0, fouls: 0, status: 'bench', team: 'away', x: 76.5, y: 91 },
-  { id: 'a9', name: 'Player 9',number: 9, points: 0, fouls: 0, status: 'bench', team: 'away', x: 82.5, y: 91 },
-  { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 88.5, y: 91 },
+  // Bench players aligned in a vertical column along the right sideline in Vertical View
+  { id: 'a6', name: 'Qian',    number: 6, points: 0, fouls: 0, status: 'bench', team: 'away', x: 58, y: 92 },
+  { id: 'a7', name: 'Ren',     number: 7, points: 0, fouls: 0, status: 'bench', team: 'away', x: 66, y: 92 },
+  { id: 'a8', name: 'Player 8',number: 8, points: 0, fouls: 0, status: 'bench', team: 'away', x: 74, y: 92 },
+  { id: 'a9', name: 'Player 9',number: 9, points: 0, fouls: 0, status: 'bench', team: 'away', x: 82, y: 92 },
+  { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 90, y: 92 },
 ];
 
 // ==========================================
@@ -202,9 +202,9 @@ export const BasketballBoard: React.FC = () => {
   const [period, setPeriod] = useState(1);
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
-  const [showDiagramLabels, setShowDiagramLabels] = useState(false);
+  const [showDiagramLabels, setShowDiagramLabels] = useState(true);
   
-  // Tactical Board State & Drawing Systems [1]
+  // Tactical Board State & Drawing Systems
   const [activeTool, setActiveTool] = useState<'move' | 'draw' | 'erase'>('move');
   const [drawings, setDrawings] = useState<{ id: string; points: { x: number; y: number }[]; color: string; width: number }[]>([]);
   const [currentDrawingPoints, setCurrentDrawingPoints] = useState<{ x: number; y: number }[]>([]);
@@ -213,10 +213,10 @@ export const BasketballBoard: React.FC = () => {
   const [penSize, setPenSize] = useState<number>(4);
   const [eraserSize, setEraserSize] = useState<number>(8);
   
-  // Dynamic Orientation State [1]
+  // Dynamic Orientation State
   const [isPortrait, setIsPortrait] = useState<boolean>(true);
 
-  // Responsive Screen Orientation Tracking [1]
+  // Responsive Screen Orientation Tracking
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => {
@@ -227,17 +227,18 @@ export const BasketballBoard: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Helper to map drawing points accurately depending on orientation [1]
+  // Map drawing coordinates to SVG pixels depending on active aspect ratio
   const getSvgPoints = useCallback((points: { x: number; y: number }[]) => {
     return points.map(p => {
       if (isPortrait) {
-        return `${p.y * 3.8},${p.x * 5.8}`;
+        // Vertical layout mapping: SVG X is mapped to short axis (y), SVG Y is mapped to long axis (x)
+        return `${p.y * 1.5},${p.x * 2.8}`;
       }
-      return `${p.x * 5.8},${p.y * 3.8}`;
+      // Horizontal layout mapping: SVG X is long axis (x), SVG Y is short axis (y)
+      return `${p.x * 2.8},${p.y * 1.5}`;
     }).join(' ');
   }, [isPortrait]);
 
-  // Multi-Touch Pointer Drag Tracking Refs [1]
   const activeDragsRef = useRef<Record<number, { 
     playerId: string; 
     startX: number; 
@@ -246,7 +247,6 @@ export const BasketballBoard: React.FC = () => {
     playerStartY: number;
   }>>({});
 
-  // Timer sync helper key to reset only the shot clock active interval
   const [timerResetKey, setTimerResetKey] = useState(0);
 
   // UI States
@@ -254,33 +254,24 @@ export const BasketballBoard: React.FC = () => {
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
 
-  // Instant Substitution
+  // Instant Substitution Selection
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
 
   // Drag-drop substitution
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
-  // Tactical court drag states
   const [courtDragId, setCourtDragId] = useState<string | null>(null);
-  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const courtRef = useRef<HTMLDivElement>(null);
 
   const isViewer = mode === 'viewer';
 
-  // SSR-Safe Mobile Device Touch Detection
-  const isMobileDevice = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-  }, []);
-
-  // ── DERIVED VALUES ──
+  // Derived Score / Foul Totals
   const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
   const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // RESTORED SCORESHEET AND SCORERS DERIVATIONS
   const scoresheetMap = useMemo(() => {
     const home: Record<number, { playerNumber: number; playerName: string }> = {};
     const away: Record<number, { playerNumber: number; playerName: string }> = {};
@@ -315,7 +306,7 @@ export const BasketballBoard: React.FC = () => {
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
-  // Substitution execution logic (Official scoreboard substitutions)
+  // Swap statuses and tactical coordinates seamlessly
   const executeSubstitution = useCallback((id1: string, id2: string) => {
     if (id1 === id2 || isViewer) return;
     const allPlayers = [...homePlayers, ...awayPlayers];
@@ -327,14 +318,13 @@ export const BasketballBoard: React.FC = () => {
 
     const setter = p1.team === 'home' ? setHomePlayers : setAwayPlayers;
     setter(prev => prev.map(p => {
-      // Swapping status and coordinates between active and benched player [1]
       if (p.id === p1.id) return { ...p, status: p2.status, x: p2.x, y: p2.y };
       if (p.id === p2.id) return { ...p, status: p1.status, x: p1.x, y: p1.y };
       return p;
     }));
   }, [homePlayers, awayPlayers, isViewer]);
 
-  // ── LOCAL BROADCAST CHANNEL ──
+  // Local Broadcast Sync Channel
   useEffect(() => {
     try {
       bcRef.current = new BroadcastChannel('scoreboard');
@@ -359,7 +349,7 @@ export const BasketballBoard: React.FC = () => {
     try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
   }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
 
-  // ── ESTABLISH REALTIME CONNECTION ──
+  // Establish Supabase Sync Channel
   useEffect(() => {
     if (!supabase || !isSyncEnabled) {
       setSyncStatus('OFFLINE');
@@ -381,19 +371,16 @@ export const BasketballBoard: React.FC = () => {
           setAwayPlayers(data.awayPlayers);
           setGameTime(data.gameTime);
           
-          // Reset local viewer shot clock interval when a manual 24s/14s override occurs
           if (data.shotClock !== shotClock && (data.shotClock === 24 || data.shotClock === 14)) {
             setTimerResetKey(k => k + 1);
           }
           setShotClock(data.shotClock);
-          
           setIsRunning(data.isRunning);
           setPeriod(data.period);
           setGameEvents(data.gameEvents);
           setView(data.view);
           setClockMode(data.clockMode);
           
-          // LIVE DRAWINGS SYNC [1]
           if (data.drawings !== undefined) setDrawings(data.drawings);
           if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
         }
@@ -417,7 +404,7 @@ export const BasketballBoard: React.FC = () => {
     };
   }, [mode, isSyncEnabled, shotClock]);
 
-  // ── BROADCAST STATE CHANGES ──
+  // Broadcast Controllers State Changes
   useEffect(() => {
     if (mode !== 'controller' || !syncChannelRef.current || !isSyncEnabled) return;
 
@@ -440,11 +427,10 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints]);
 
-  // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ── [1]
+  // Standard drag tracking mapped directly to dynamic court orientation
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
-    if (isViewer) return;
+    if (isViewer || activeTool !== 'move') return;
     
-    // Prevent default touch/gesture actions (like page scrolling) ONLY when grabbing a token [1]
     e.preventDefault();
     e.stopPropagation();
 
@@ -455,17 +441,19 @@ export const BasketballBoard: React.FC = () => {
     const p = allPlayers.find(pl => pl.id === playerId);
     if (!p) return;
 
-    // Convert client coordinates dynamically depending on vertical or horizontal orientation [1]
-    const startX = ((e.clientX - rect.left) / rect.width) * 100;
-    const startY = ((e.clientY - rect.top) / rect.height) * 100;
+    const clientXPercent = ((e.clientX - rect.left) / rect.width) * 100;
+    const clientYPercent = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Capture pointer directly on the element so dragging is fully stable [1]
+    // Map axes cleanly: In Portrait, Y-axis represents court X, X-axis represents court Y
+    const startX = isPortrait ? clientYPercent : clientXPercent;
+    const startY = isPortrait ? clientXPercent : clientYPercent;
+
     e.currentTarget.setPointerCapture(e.pointerId);
 
     activeDragsRef.current[e.pointerId] = {
       playerId,
-      startX: isPortrait ? startY : startX, // Swap starting coordinate inputs based on screen mode [1]
-      startY: isPortrait ? startX : startY,
+      startX,
+      startY,
       playerStartX: p.x,
       playerStartY: p.y
     };
@@ -474,7 +462,7 @@ export const BasketballBoard: React.FC = () => {
   };
 
   const handleCourtPointerMove = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
-    if (isViewer) return;
+    if (isViewer || activeTool !== 'move') return;
     const dragInfo = activeDragsRef.current[e.pointerId];
     if (!dragInfo || dragInfo.playerId !== playerId) return;
 
@@ -484,9 +472,11 @@ export const BasketballBoard: React.FC = () => {
     const clientXPercent = ((e.clientX - rect.left) / rect.width) * 100;
     const clientYPercent = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Transpose horizontal and vertical delta offsets depending on orientation [1]
-    const deltaX = (isPortrait ? clientYPercent : clientXPercent) - dragInfo.startX;
-    const deltaY = (isPortrait ? clientXPercent : clientYPercent) - dragInfo.startY;
+    const currentX = isPortrait ? clientYPercent : clientXPercent;
+    const currentY = isPortrait ? clientXPercent : clientYPercent;
+
+    const deltaX = currentX - dragInfo.startX;
+    const deltaY = currentY - dragInfo.startY;
 
     const newX = clamp(dragInfo.playerStartX + deltaX, 0, 100);
     const newY = clamp(dragInfo.playerStartY + deltaY, 0, 100);
@@ -506,25 +496,12 @@ export const BasketballBoard: React.FC = () => {
     if (isViewer) return;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // ignore
-    }
+    } catch (err) {}
     delete activeDragsRef.current[e.pointerId];
     setCourtDragId(null);
   };
 
-  const handleCourtPointerCancel = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
-    if (isViewer) return;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // ignore
-    }
-    delete activeDragsRef.current[e.pointerId];
-    setCourtDragId(null);
-  };
-
-  // ── TACTICAL BOARD FREEHAND DRAWING & ERASING HANDLERS ── [1]
+  // Drawing Pointer Event Handlers
   const handleCourtBgPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isViewer || activeTool === 'move') return;
     e.preventDefault();
@@ -536,7 +513,6 @@ export const BasketballBoard: React.FC = () => {
     const clientXPercent = ((e.clientX - rect.left) / rect.width) * 100;
     const clientYPercent = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Transpose inputs if rendering vertically [1]
     const x = isPortrait ? clientYPercent : clientXPercent;
     const y = isPortrait ? clientXPercent : clientYPercent;
 
@@ -572,19 +548,12 @@ export const BasketballBoard: React.FC = () => {
 
   const handleCourtBgPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isViewer) return;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch (err) {}
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) {}
 
     if (activeTool === 'draw' && isDrawing && currentDrawingPoints.length > 1) {
       setDrawings(prev => [
         ...prev,
-        {
-          id: uid(),
-          points: currentDrawingPoints,
-          color: strokeColor,
-          width: penSize // Save customizable line size [1]
-        }
+        { id: uid(), points: currentDrawingPoints, color: strokeColor, width: penSize }
       ]);
     }
 
@@ -596,11 +565,11 @@ export const BasketballBoard: React.FC = () => {
     setDrawings(prev => {
       return prev.filter(drawing => {
         const pts = drawing.points;
-        const threshold = eraserSize; // Eraser threshold dynamically scales [1]
+        const threshold = eraserSize;
         for (let i = 0; i < pts.length - 1; i++) {
           const dist = getPointToSegmentDistance(ex, ey, pts[i].x, pts[i].y, pts[i+1].x, pts[i+1].y);
           if (dist < threshold) {
-            return false; // Wipe the entire continuous path [1]
+            return false;
           }
         }
         return true;
@@ -608,7 +577,7 @@ export const BasketballBoard: React.FC = () => {
     });
   };
 
-  // ── INDEPENDENT GAME CLOCK LOOP ──
+  // Game/Shot clock tickers
   useEffect(() => {
     if (!isRunning) return;
     const t = setInterval(() => {
@@ -623,7 +592,6 @@ export const BasketballBoard: React.FC = () => {
     return () => clearInterval(t);
   }, [isRunning, clockMode]);
 
-  // ── INDEPENDENT SHOT CLOCK LOOP ──
   useEffect(() => {
     if (!isRunning) return;
     const t = setInterval(() => {
@@ -632,7 +600,7 @@ export const BasketballBoard: React.FC = () => {
     return () => clearInterval(t);
   }, [isRunning, timerResetKey]);
 
-  // Point scoring actions
+  // Roster Actions
   const addPoints = useCallback((team: 'home' | 'away', courtIndex: number, pts: number) => {
     if (isViewer) return;
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
@@ -649,17 +617,12 @@ export const BasketballBoard: React.FC = () => {
           playerNumber: target.number, playerName: target.name,
           value: pts, homeScoreBefore: hs, awayScoreBefore: as, timestamp: now
         };
-        const last = prevEvs[prevEvs.length - 1];
-        if (last && last.type === 'score' && last.team === team && last.playerId === target.id && last.value === pts && Math.abs((last.timestamp || 0) - now) < 60) {
-          return prevEvs;
-        }
         return [...prevEvs, newEv];
       });
       return prev.map(p => p.id === target.id ? { ...p, points: Math.max(0, p.points + pts) } : p);
     });
   }, [homePlayers, awayPlayers, isViewer]);
 
-  // Foul assignment actions
   const addFoul = useCallback((team: 'home' | 'away', courtIndex: number, delta: number) => {
     if (isViewer) return;
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
@@ -672,16 +635,11 @@ export const BasketballBoard: React.FC = () => {
           const now = Date.now();
           const hs = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'home').reduce((s, e) => s + e.value, 0);
           const as = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'away').reduce((s, e) => s + e.value, 0);
-          const newEv = {
+          return [...prevEvs, {
             id: uid(), type: 'foul' as const, team, playerId: target.id,
             playerNumber: target.number, playerName: target.name,
             value: delta, homeScoreBefore: hs, awayScoreBefore: as, timestamp: now
-          };
-          const last = prevEvs[prevEvs.length - 1];
-          if (last && last.type === 'foul' && last.team === team && last.playerId === target.id && last.value === delta && Math.abs((last.timestamp || 0) - now) < 60) {
-            return prevEvs;
-          }
-          return [...prevEvs, newEv];
+          }];
         });
       }
       return prev.map(p => p.id === target.id ? { ...p, fouls: Math.max(0, p.fouls + delta) } : p);
@@ -727,7 +685,6 @@ export const BasketballBoard: React.FC = () => {
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
   }, [isViewer]);
 
-  // Instant substitution selection handlers
   const handleSelectCourt = useCallback((id: string) => {
     if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
@@ -740,7 +697,6 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [selectedCourtId, executeSubstitution, isViewer]);
 
-  // Drag-drop substitution handlers
   const handleRosterDragStart = useCallback((e: React.DragEvent, playerId: string) => {
     if (isViewer) return;
     e.dataTransfer.effectAllowed = 'move';
@@ -767,7 +723,7 @@ export const BasketballBoard: React.FC = () => {
   const handleResetShotClock = (seconds: number) => {
     if (isViewer) return;
     setShotClock(seconds);
-    setTimerResetKey(k => k + 1); // Triggers shot-clock only interval to clear and start a fresh 1-second countdown
+    setTimerResetKey(k => k + 1);
   };
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
@@ -776,22 +732,11 @@ export const BasketballBoard: React.FC = () => {
     try {
       const features = 'toolbar=0,location=0,menubar=0,resizable=1,scrollbars=0,width=1280,height=720';
       window.open('/display', 'scoreboard_display', features);
-      
-      setTimeout(() => {
-        try {
-          bcRef.current?.postMessage({
-            type: 'init',
-            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers }
-          });
-        } catch (e) {}
-      }, 250);
-    } catch (e) {
-      // ignore
-    }
-  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
+    } catch (e) {}
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 pb-12">
       <div className="max-w-screen-2xl mx-auto p-3 md:p-5 space-y-4">
 
         {/* ── REALTIME ROLE BAR ── */}
@@ -804,13 +749,8 @@ export const BasketballBoard: React.FC = () => {
                 : 'bg-red-500'
             }`} />
             <span className="text-xs text-slate-400 font-medium">
-              {supabase && isSyncEnabled 
-                ? `Connected (${syncStatus})` 
-                : !supabase 
-                  ? 'Offline Mode (Configure VITE_SUPABASE_URL)' 
-                  : 'Sync Connection Closed'}
+              {supabase && isSyncEnabled ? `Connected (${syncStatus})` : 'Offline Mode'}
             </span>
-            
             {supabase && (
               <button
                 onClick={() => setIsSyncEnabled(!isSyncEnabled)}
@@ -824,7 +764,6 @@ export const BasketballBoard: React.FC = () => {
               </button>
             )}
           </div>
-          
           <div className="flex gap-2 bg-slate-800 p-1 rounded-lg">
             <button
               onClick={() => setMode('controller')}
@@ -832,7 +771,7 @@ export const BasketballBoard: React.FC = () => {
                 mode === 'controller' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Smartphone size={13} /> Controller (Tablet)
+              <Smartphone size={13} /> Controller
             </button>
             <button
               onClick={() => setMode('viewer')}
@@ -840,7 +779,7 @@ export const BasketballBoard: React.FC = () => {
                 mode === 'viewer' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Monitor size={13} /> Viewer (TV Screen)
+              <Monitor size={13} /> Viewer
             </button>
           </div>
         </div>
@@ -850,7 +789,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('scoreboard')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-655 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <LayoutDashboard size={16} /> Scoreboard & Rosters
@@ -858,7 +797,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('court')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-650 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Move size={16} /> Full Tactical Court
@@ -880,33 +819,27 @@ export const BasketballBoard: React.FC = () => {
                 <div className="hidden sm:flex items-center gap-2">
                   {!isViewer && (
                     <button onClick={undoLast} disabled={gameEvents.length === 0}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 text-white text-xs font-semibold transition-all shadow-md">
                       <Undo2 size={13} /> Undo Last
                     </button>
                   )}
                   <button onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all shadow-md">
                     <FileText size={13} /> Scoresheet PDF
                   </button>
                   <button onClick={() => setShowEvents(v => !v)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all shadow-md">
                     <List size={13} /> Events
                   </button>
                   <button onClick={openDisplay}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all shadow-md">
                     <LayoutDashboard size={13} /> Display
                   </button>
                   {!isViewer && (
-                    <>
-                      <button onClick={resetGame}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                        <RotateCcw size={13} /> Reset
-                      </button>
-                      <button onClick={() => setView('court')}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                        <Move size={13} /> Open Tactical Page
-                      </button>
-                    </>
+                    <button onClick={resetGame}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all shadow-md">
+                      <RotateCcw size={13} /> Reset
+                    </button>
                   )}
                 </div>
 
@@ -923,15 +856,8 @@ export const BasketballBoard: React.FC = () => {
                       )}
                       <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
                       <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
-                      
                       <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
-
-                      {!isViewer && (
-                        <>
-                          <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
-                          <button onClick={() => { setView('court'); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
-                        </>
-                      )}
+                      {!isViewer && <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>}
                     </div>
                   )}
                 </div>
@@ -946,7 +872,7 @@ export const BasketballBoard: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-3 sm:py-5 border-r border-slate-700/40 bg-gradient-to-b from-orange-950/30 to-transparent">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Trophy size={16} className="text-amber-500/80" />
-                    <h2 className="text-amber-400 text-base md:text-lg font-bold tracking-wider uppercase">Home</h2>
+                    <h2 className="text-amber-400 text-base md:text-lg font-bold tracking-wider uppercase font-sans">Home</h2>
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full opacity-50" />
@@ -955,7 +881,7 @@ export const BasketballBoard: React.FC = () => {
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-sm sm:text-base text-slate-400">
-                    <span className="text-sm sm:text-base">Fouls:</span>
+                    <span>Fouls:</span>
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
                   </div>
                 </div>
@@ -983,11 +909,11 @@ export const BasketballBoard: React.FC = () => {
                         </button>
                         <div className="ml-2 inline-flex rounded overflow-hidden border border-slate-700/50">
                           <button onClick={() => setClockMode('countdown')}
-                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'countdown' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'countdown' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>
                             Countdown
                           </button>
                           <button onClick={() => setClockMode('stopwatch')}
-                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'stopwatch' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'stopwatch' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>
                             Stopwatch
                           </button>
                         </div>
@@ -1007,11 +933,11 @@ export const BasketballBoard: React.FC = () => {
                     {!isViewer && (
                       <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
                         <button onClick={() => handleResetShotClock(24)}
-                          className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                          className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95">
                           <RefreshCw size={9} />24s
                         </button>
                         <button onClick={() => handleResetShotClock(14)}
-                          className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                          className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95">
                           <RefreshCw size={9} />14s
                         </button>
                       </div>
@@ -1020,8 +946,8 @@ export const BasketballBoard: React.FC = () => {
 
                   {!isViewer && (
                     <button onClick={() => setIsRunning(!isRunning)}
-                      className={`w-full max-w-[200px] py-2 rounded-xl font-bold transition-all text-xs shadow-lg active:scale-[0.98] flex items-center justify-center gap-1.5 ${
-                        isRunning ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white' : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
+                      className={`w-full max-w-[200px] py-2 rounded-xl font-bold transition-all text-xs shadow-lg flex items-center justify-center gap-1.5 ${
+                        isRunning ? 'bg-gradient-to-r from-red-600 to-red-700 text-white' : 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white'
                       }`}>
                       {isRunning ? <><Pause size={14} />Pause Clock</> : <><Play size={14} />Start Clock</>}
                     </button>
@@ -1032,7 +958,7 @@ export const BasketballBoard: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-5 md:py-7 border-l border-slate-700/40 bg-gradient-to-b from-blue-950/30 to-transparent">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Trophy size={16} className="text-sky-500/80" />
-                    <h2 className="text-sky-400 text-base md:text-lg font-bold tracking-wider uppercase">Away</h2>
+                    <h2 className="text-sky-400 text-base md:text-lg font-bold tracking-wider uppercase font-sans">Away</h2>
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-sky-500/20 blur-2xl rounded-full opacity-50" />
@@ -1041,7 +967,7 @@ export const BasketballBoard: React.FC = () => {
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
-                    <span className="text-base md:text-lg">Fouls:</span>
+                    <span>Fouls:</span>
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                 </div>
@@ -1052,8 +978,7 @@ export const BasketballBoard: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <RosterPanel team="home" players={homePlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
-                onRename={renamePlayer}
-                onChangeNumber={changePlayerNumber}
+                onRename={renamePlayer} onChangeNumber={changePlayerNumber}
                 draggedId={draggedId} dropTargetId={dropTargetId}
                 onDragStart={handleRosterDragStart} onDrop={handleRosterDrop}
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
@@ -1062,8 +987,7 @@ export const BasketballBoard: React.FC = () => {
                 onBenchClick={handleBenchClick} isViewer={isViewer} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
-                onRename={renamePlayer}
-                onChangeNumber={changePlayerNumber}
+                onRename={renamePlayer} onChangeNumber={changePlayerNumber}
                 draggedId={draggedId} dropTargetId={dropTargetId}
                 onDragStart={handleRosterDragStart} onDrop={handleRosterDrop}
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
@@ -1071,199 +995,48 @@ export const BasketballBoard: React.FC = () => {
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer} />
             </div>
-
-            {/* Scoresheet Table */}
-            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50">
-              <div className="px-5 py-3 bg-slate-800/80 border-b border-slate-700/40">
-                <h3 className="text-sm font-bold text-center text-slate-200 tracking-widest uppercase">Basketball Scoresheet</h3>
-                <p className="text-center text-[10px] text-slate-500 mt-0.5">{new Date().toLocaleDateString()}</p>
-                <div className="flex items-center justify-center gap-4 mt-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Home</span>
-                    <span className="text-2xl font-black text-orange-400 tabular-nums">{homeScore}</span>
-                  </div>
-                  <span className="text-slate-600 font-bold text-sm">VS</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-black text-sky-400 tabular-nums">{awayScore}</span>
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Away</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center mt-2">
-                  <button onClick={() => setShowDebug(d => !d)} className="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded">{showDebug ? 'Hide' : 'Show'} Debug</button>
-                </div>
-              </div>
-
-              <div className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Point sequence 1–{maxSheetRows}</div>
-                  <button className="sm:hidden text-xs text-amber-300 underline" onClick={() => setShowScoresheetMobile(s => !s)}>{showScoresheetMobile ? 'Hide Scoresheet' : 'Show Scoresheet'}</button>
-                </div>
-                <div className={`${showScoresheetMobile ? 'block' : 'hidden sm:block'} overflow-x-auto`}>
-                  <table className="mx-auto w-full text-sm border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Home</th>
-                        <th className="bg-slate-700/60 text-slate-300 border border-slate-600 px-3 py-1.5 font-bold w-14 text-center">Score</th>
-                        <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Away</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.from({ length: maxSheetRows }, (_, i) => i + 1).map(n => {
-                        const homeEntry = scoresheetMap.home[n];
-                        const awayEntry = scoresheetMap.away[n];
-                        return (
-                          <tr key={n} className={n % 2 === 0 ? 'bg-slate-800/30' : ''}>
-                            <td className="border border-slate-700/50 px-3 py-0.5 text-center">
-                              {homeEntry !== undefined
-                                ? <span className="font-black text-amber-400 text-sm">#{homeEntry.playerNumber} <span className="text-sm font-medium">{homeEntry.playerName}</span></span>
-                                : <span className="text-slate-700">—</span>}
-                            </td>
-                            <td className="border border-slate-600 px-3 py-0.5 text-center bg-slate-700/30">
-                              <span className="font-bold text-slate-300 tabular-nums">{n}</span>
-                            </td>
-                            <td className="border border-slate-700/50 px-3 py-0.5 text-center">
-                              {awayEntry !== undefined
-                                ? <span className="font-black text-sky-400 text-sm">#{awayEntry.playerNumber} <span className="text-sm font-medium">{awayEntry.playerName}</span></span>
-                                : <span className="text-slate-700">—</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Score stats footer */}
-                <div className="mt-4 flex flex-col sm:flex-row gap-3 border-t border-slate-700/40 pt-3">
-                  <div className="flex-1">
-                    <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
-                    <div className="flex flex-col gap-1">
-                      {homeScorers.length > 0 ? homeScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-950/10 border border-orange-700/20 px-2 py-1 rounded">
-                            <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
-                            <span className="text-sm text-amber-200 truncate">#{p.number} {p.name}</span>
-                            <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
-                          </div>
-                      )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
-                    <div className="flex flex-col gap-1">
-                      {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
-                            <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
-                            <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
-                            <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
-                          </div>
-                      )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-center text-[10px] text-slate-600 italic mt-2">Player numbers appear at the cumulative score when they scored.</p>
-              </div>
-              
-              {showDebug && (
-                <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64 hidden sm:block">
-                  <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents</div>
-                  <pre className="text-[11px] text-slate-200 whitespace-pre-wrap mb-3">{JSON.stringify(gameEvents, null, 2)}</pre>
-                  <div className="text-[11px] font-bold text-slate-300 mb-2">Derived scoresheetMap</div>
-                  <pre className="text-[11px] text-slate-200 whitespace-pre-wrap">{JSON.stringify(scoresheetMap, null, 2)}</pre>
-                </div>
-              )}
-            </div>
-
-            {/* Events Log */}
-            {showEvents && (
-              <div className="rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-bold text-slate-300">Recent Events</span>
-                  <span className="text-[10px] text-slate-500">(newest first)</span>
-                </div>
-                {gameEvents.length === 0
-                  ? <p className="text-[11px] text-slate-500 italic text-center py-4">No events yet. Select a player to record points or fouls.</p>
-                  : <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                      {[...gameEvents].reverse().map(ev => (
-                        <div key={ev.id} className="flex items-center gap-3 text-[11px] py-1 border-b border-slate-700/30">
-                          <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
-                            {ev.team === 'home' ? 'HOME' : 'AWAY'}
-                          </span>
-                          <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
-                          <span className={ev.type === 'score' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                            {ev.type === 'score' ? `+${ev.value} pts` : `+${ev.value} foul`}
-                          </span>
-                          <span className="text-slate-600 ml-auto">{ev.homeScoreBefore + (ev.team === 'home' && ev.type === 'score' ? ev.value : 0)} – {ev.awayScoreBefore + (ev.team === 'away' && ev.type === 'score' ? ev.value : 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-                }
-              </div>
-            )}
-
-            {/* Quick Guide */}
-            <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-4 hidden sm:block">
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Quick Guide</div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  ['1', 'amber', 'Click +1/+2/+3 to add points to an active player'],
-                  ['2', 'emerald', 'Click or drag active players to benched slots to swap them'],
-                  ['3', 'sky', 'Navigate to the Tactical Court tab to reposition tokens'],
-                  ['4', 'rose', 'Press "Undo Last" to revert the most recent score event'],
-                ].map(([n, color, text]) => (
-                  <div key={n} className="flex items-start gap-2">
-                    <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-black text-white bg-${color}-600`}>{n}</div>
-                    <p className="text-[10px] text-slate-400 leading-tight">{text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
         {/* ==========================================
-            VIEW 2: FULL TACTICAL COURT (RESPONSIVE ORIENTATION)
+            VIEW 2: FULL TACTICAL COURT (ACCURATE ROTATION)
            ========================================== */}
         {view === 'court' && (
           <div className="space-y-4">
             
-            {/* RESPONSIVE FLOATING SCOREBAR (WONT OVERLAP ON MOBILE) [1] */}
-            <div className="grid grid-cols-3 gap-1 sm:gap-2 items-center bg-slate-800/80 border border-slate-700/50 rounded-xl p-2 sm:p-3 shadow-lg select-none">
-              {/* Home Team Mini Score */}
-              <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 justify-start pl-1 sm:pl-4">
+            {/* RESPONSIVE SCOREBAR */}
+            <div className="grid grid-cols-3 gap-2 items-center bg-slate-800/80 border border-slate-700/50 rounded-xl p-3 shadow-lg select-none">
+              <div className="flex items-center gap-3 justify-start pl-4">
                 <span className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">Home</span>
                 <div className="flex items-baseline gap-1">
                   <span className="text-xl sm:text-3xl font-black text-orange-500">{homeScore}</span>
-                  <span className="text-[10px] sm:text-xs text-slate-400 font-medium">({homeFouls} F)</span>
+                  <span className="text-xs text-slate-400">({homeFouls} F)</span>
                 </div>
               </div>
-              
-              {/* Game Timers */}
               <div className="text-center flex flex-col items-center">
-                <div className="text-lg sm:text-2xl font-mono font-black text-emerald-400 leading-none mb-0.5 sm:mb-1">
+                <div className="text-lg sm:text-2xl font-mono font-black text-emerald-400 mb-1">
                   {formatTime(gameTime)}
                 </div>
-                <div className="flex items-center gap-1 sm:gap-3 text-[9px] sm:text-xs text-slate-500">
-                  <span>P:<b className="text-slate-300 font-bold">{period}</b></span>
+                <div className="flex items-center gap-3 text-xs text-slate-500">
+                  <span>P: <b className="text-slate-300">{period}</b></span>
                   <span>|</span>
-                  <span className={shotUrgent ? 'text-red-400 font-bold' : 'text-slate-300'}>S:{shotClock}s</span>
+                  <span className={shotUrgent ? 'text-red-400 font-bold' : 'text-slate-300'}>Shot: {shotClock}s</span>
                 </div>
               </div>
-
-              {/* Away Team Mini Score */}
-              <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 justify-end pr-1 sm:pr-4">
-                <div className="flex items-baseline gap-1 order-last sm:order-none">
-                  <span className="text-[10px] sm:text-xs text-slate-400 font-medium">({awayFouls} F)</span>
+              <div className="flex items-center gap-3 justify-end pr-4">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-xs text-slate-400">({awayFouls} F)</span>
                   <span className="text-xl sm:text-3xl font-black text-blue-500">{awayScore}</span>
                 </div>
                 <span className="text-xs sm:text-sm font-bold text-sky-400 uppercase tracking-wider">Away</span>
               </div>
             </div>
 
-            {/* ACTION ROW */}
-            <div className="flex items-center justify-between">
+            {/* ACTION / CONTROL ROW */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-slate-400">
-                <Info size={14} className="text-amber-400" />
-                <span>💡 Drag any player token to move them individually. To move multiple players, touch them simultaneously on mobile.</span>
+                <Info size={14} className="text-amber-400 flex-shrink-0" />
+                <span>Move tool dragging stays responsive when your device's orientation changes.</span>
               </div>
               <div className="flex gap-2">
                 <button
@@ -1271,149 +1044,237 @@ export const BasketballBoard: React.FC = () => {
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow ${
                     showDiagramLabels 
                       ? 'bg-amber-500 text-slate-900 border-amber-400' 
-                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
                   }`}
                 >
-                  {showDiagramLabels ? 'Hide Court Labels' : 'Show Court Labels'}
+                  {showDiagramLabels ? 'Hide Labels' : 'Show Labels'}
                 </button>
               </div>
             </div>
 
-            {/* RESPONSIVE COURT DIAGRAM CONTAINER */}
+            {/* ==========================================
+                NEW DESIGN: EDIT PANEL CARRIED TO TOP OF COURT 
+                (Renders inline above court container to prevent blocking the court)
+               ========================================== */}
+            {!isViewer && (
+              <div className="flex justify-center w-full">
+                <div className="flex flex-wrap items-center justify-center gap-3 p-2 bg-slate-900/95 border border-slate-700/50 rounded-xl shadow-2xl w-full max-w-lg">
+                  {/* Select Move Tool */}
+                  <button
+                    onClick={() => setActiveTool('move')}
+                    title="Move Players"
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Move size={14} /> Move (✥)
+                  </button>
+
+                  {/* Select Draw Tool */}
+                  <button
+                    onClick={() => setActiveTool('draw')}
+                    title="Draw Lines"
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Pencil size={14} /> Draw (✎)
+                  </button>
+
+                  {/* Select Erase Tool */}
+                  <button
+                    onClick={() => setActiveTool('erase')}
+                    title="Eraser"
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Eraser size={14} /> Erase (⌫)
+                  </button>
+
+                  <div className="border-l border-slate-700 h-6 mx-1" />
+
+                  {/* Clear Drawings */}
+                  <button
+                    onClick={() => {
+                      setDrawings([]);
+                      setCurrentDrawingPoints([]);
+                    }}
+                    title="Clear All Drawings"
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+
+                  {/* Drawing Configurations */}
+                  {activeTool === 'draw' && (
+                    <div className="flex items-center gap-2 border-l border-slate-700 pl-3">
+                      <div className="flex gap-1">
+                        {[
+                          ['#ff4444', 'bg-red-500'],
+                          ['#3b82f6', 'bg-blue-500'],
+                          ['#ffffff', 'bg-white border border-slate-600']
+                        ].map(([colorCode, bgClass]) => (
+                          <button
+                            key={colorCode}
+                            onClick={() => setStrokeColor(colorCode)}
+                            className={`w-4 h-4 rounded-full ${bgClass} transition-transform ${
+                              strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <select
+                        value={penSize}
+                        onChange={e => setPenSize(Number(e.target.value))}
+                        className="bg-slate-850 text-slate-300 border border-slate-700 text-[10px] px-1 py-0.5 rounded focus:outline-none"
+                      >
+                        <option value={2}>Thin</option>
+                        <option value={4}>Medium</option>
+                        <option value={8}>Thick</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {activeTool === 'erase' && (
+                    <div className="flex items-center gap-2 border-l border-slate-700 pl-3">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Size:</span>
+                      <select
+                        value={eraserSize}
+                        onChange={e => setEraserSize(Number(e.target.value))}
+                        className="bg-slate-850 text-slate-300 border border-slate-700 text-[10px] px-1 py-0.5 rounded focus:outline-none"
+                      >
+                        <option value={4}>Small</option>
+                        <option value={8}>Medium</option>
+                        <option value={15}>Large</option>
+                        <option value={24}>XL</option>
+                      </select>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            )}
+
+            {/* COURT CANVAS CONTAINER */}
             <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex justify-center">
-              <div className="w-full relative">
+              <div className="w-full relative max-w-2xl">
                 <div ref={courtRef}
                   onPointerDown={handleCourtBgPointerDown}
                   onPointerMove={handleCourtBgPointerMove}
                   onPointerUp={handleCourtBgPointerUp}
                   onPointerCancel={handleCourtBgPointerUp}
-                  className={`min-w-[320px] md:min-w-0 relative w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
-                    isPortrait ? 'aspect-[38/58]' : 'aspect-[58/38]'
+                  className={`relative w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl bg-slate-900 ${
+                    isPortrait ? 'aspect-[150/280]' : 'aspect-[280/150]'
                   } ${
                     courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'
                   }`}
                   style={{ backgroundColor: '#fdd2ab' }}
                 >
                   
-                  {/* 1. RE-ALIGNED SVG */}
-                  <svg viewBox={isPortrait ? "0 0 380 580" : "0 0 580 380"} className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                  {/* COURT DRAWINGS LAYER */}
+                  <svg viewBox={isPortrait ? "0 0 150 280" : "0 0 280 150"} className="w-full h-full absolute inset-0 pointer-events-none select-none">
                     {isPortrait ? (
-                      // ── VERTICAL SVG COURT LINES (PORTRAIT) ── [1]
+                      // ── VERTICAL SVG MARKINGS ──
                       <g>
-                        {/* Peach boundary background */}
-                        <rect x="0" y="0" width="380" height="580" fill="#fdd2ab" />
+                        <rect x="0" y="0" width="150" height="280" fill="#fdd2ab" />
                         
-                        {/* Bench Area Bottom Strip background */}
-                        <rect x="0" y="510" width="380" height="70" fill="#dfd0c0" />
+                        {/* Orange-painted Key Areas */}
+                        <rect x="50" y="5" width="50" height="50" fill="#f2913f" />
+                        <rect x="50" y="225" width="50" height="50" fill="#f2913f" />
+
+                        {/* Court Boundaries */}
+                        <rect x="5" y="5" width="140" height="270" fill="none" stroke="white" strokeWidth="1.5" />
                         
-                        {/* Key Areas (Bright Orange) */}
-                        <rect x="120" y="40" width="100" height="105" fill="#f2913f" />
-                        <rect x="120" y="435" width="100" height="105" fill="#f2913f" />
+                        {/* Center Court Division Line */}
+                        <line x1="5" y1="140" x2="145" y2="140" stroke="white" strokeWidth="1.8" />
+                        <circle cx="75" cy="140" r="22" fill="none" stroke="white" strokeWidth="1.5" />
+                        <circle cx="75" cy="140" r="6" fill="none" stroke="white" strokeWidth="1" strokeDasharray="1.5,1.5" />
 
-                        {/* Outer Court Boundary Lines */}
-                        <rect x="30" y="40" width="280" height="500" fill="none" stroke="white" strokeWidth="2.5" />
-                        
-                        {/* Half-Court line */}
-                        <line x1="30" y1="290" x2="310" y2="290" stroke="white" strokeWidth="2.5" />
-                        
-                        {/* Center Restraining Circles */}
-                        <circle cx="170" cy="290" r="40" fill="none" stroke="white" strokeWidth="2" />
-                        <circle cx="170" cy="290" r="10" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2.5,2.5" />
+                        {/* TOP HALF COURT KEY & HOOP */}
+                        <line x1="50" y1="55" x2="100" y2="55" stroke="white" strokeWidth="1.5" />
+                        <path d="M 50,55 A 25,25 0 0,0 100,55" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2,2" />
+                        <path d="M 50,55 A 25,25 0 0,1 100,55" fill="none" stroke="white" strokeWidth="1.5" />
+                        <path d="M 15,5 L 15,40 A 60,60 0 0,0 135,40 L 135,5" fill="none" stroke="white" strokeWidth="1.5" />
+                        <line x1="63" y1="15" x2="87" y2="15" stroke="white" strokeWidth="2.5" />
+                        <line x1="75" y1="5" x2="75" y2="15" stroke="white" strokeWidth="1" />
+                        <circle cx="75" cy="18" r="4.5" fill="none" stroke="#ff5500" strokeWidth="2.2" />
 
-                        {/* TOP COURT HALF LINES */}
-                        <line x1="120" y1="145" x2="220" y2="145" stroke="white" strokeWidth="2.5" />
-                        <path d="M 145,73 A 25,25 0 0,1 195,73" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                        <path d="M 120,145 A 50,50 0 0,1 220,145" fill="none" stroke="white" strokeWidth="2" />
-                        <path d="M 120,145 A 50,50 0 0,0 220,145" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
-                        <path d="M 45,40 L 45,110 A 125,125 0 0,1 295,110 L 295,40" fill="none" stroke="white" strokeWidth="2.2" />
-                        <line x1="140" y1="65" x2="200" y2="65" stroke="white" strokeWidth="3" />
-                        <line x1="170" y1="40" x2="170" y2="65" stroke="white" strokeWidth="1.5" />
-                        <circle cx="170" cy="73" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
+                        {/* BOTTOM HALF COURT KEY & HOOP */}
+                        <line x1="50" y1="225" x2="100" y2="225" stroke="white" strokeWidth="1.5" />
+                        <path d="M 50,225 A 25,25 0 0,1 100,225" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2,2" />
+                        <path d="M 50,225 A 25,25 0 0,0 100,225" fill="none" stroke="white" strokeWidth="1.5" />
+                        <path d="M 15,275 L 15,240 A 60,60 0 0,1 135,240 L 135,275" fill="none" stroke="white" strokeWidth="1.5" />
+                        <line x1="63" y1="265" x2="87" y2="265" stroke="white" strokeWidth="2.5" />
+                        <line x1="75" y1="275" x2="75" y2="265" stroke="white" strokeWidth="1" />
+                        <circle cx="75" cy="262" r="4.5" fill="none" stroke="#ff5500" strokeWidth="2.2" />
 
-                        {/* BOTTOM COURT HALF LINES */}
-                        <line x1="120" y1="435" x2="220" y2="435" stroke="white" strokeWidth="2.5" />
-                        <path d="M 145,507 A 25,25 0 0,0 195,507" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                        <path d="M 120,435 A 50,50 0 0,0 220,435" fill="none" stroke="white" strokeWidth="2" />
-                        <path d="M 120,435 A 50,50 0 0,1 220,435" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
-                        <path d="M 45,540 L 45,470 A 125,125 0 0,0 295,470 L 295,540" fill="none" stroke="white" strokeWidth="2.2" />
-                        <line x1="140" y1="515" x2="200" y2="515" stroke="white" strokeWidth="3" />
-                        <line x1="170" y1="540" x2="170" y2="515" stroke="white" strokeWidth="1.5" />
-                        <circle cx="170" cy="507" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
-
-                        {/* Hashmarks */}
-                        <line x1="30" y1="190" x2="40" y2="190" stroke="white" strokeWidth="1.8" />
-                        <line x1="30" y1="390" x2="40" y2="390" stroke="white" strokeWidth="1.8" />
-                        <line x1="300" y1="190" x2="310" y2="190" stroke="white" strokeWidth="1.8" />
-                        <line x1="300" y1="390" x2="310" y2="390" stroke="white" strokeWidth="1.8" />
-
-                        {/* Bench Zones */}
-                        <rect x="40" y="325" width="100" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="150" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="240" y="325" width="100" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                        {/* Bench Zones below division */}
+                        <rect x="15" y="145" width="30" height="15" fill="#dfd0c0" stroke="#bdaea0" strokeWidth="0.8" rx="3" />
+                        <rect x="60" y="145" width="30" height="15" fill="#ebd9c8" stroke="#bdaea0" strokeWidth="0.8" rx="3" />
+                        <rect x="105" y="145" width="30" height="15" fill="#dfd0c0" stroke="#bdaea0" strokeWidth="0.8" rx="3" />
                       </g>
                     ) : (
-                      // ── HORIZONTAL SVG CONFIGURATION ──
+                      // ── HORIZONTAL SVG MARKINGS ──
                       <g>
-                        <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
-                        <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
+                        <rect x="0" y="0" width="280" height="150" fill="#fdd2ab" />
                         
-                        <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
-                        <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
+                        <rect x="5" y="50" width="50" height="50" fill="#f2913f" />
+                        <rect x="225" y="50" width="50" height="50" fill="#f2913f" />
 
-                        <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="2.5" />
-                        <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="2.5" />
-                        <circle cx="290" cy="170" r="40" fill="none" stroke="white" strokeWidth="2" />
-                        <circle cx="290" cy="170" r="10" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2.5,2.5" />
+                        <rect x="5" y="5" width="270" height="140" fill="none" stroke="white" strokeWidth="1.5" />
+                        <line x1="140" y1="5" x2="140" y2="145" stroke="white" strokeWidth="1.8" />
+                        <circle cx="140" cy="75" r="22" fill="none" stroke="white" strokeWidth="1.5" />
+                        <circle cx="140" cy="75" r="6" fill="none" stroke="white" strokeWidth="1" strokeDasharray="1.5,1.5" />
 
-                        {/* LEFT COURT HALF LINES */}
-                        <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="2.5" />
-                        <path d="M 73,145 A 25,25 0 0,1 73,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                        <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="2" />
-                        <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
-                        <path d="M 40,45 L 110,45 A 125,125 0 0,1 110,295 L 40,295" fill="none" stroke="white" strokeWidth="2.2" />
-                        <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="3" />
-                        <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="1.5" />
-                        <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
+                        {/* LEFT HALF COURT KEY & HOOP */}
+                        <line x1="55" y1="50" x2="55" y2="100" stroke="white" strokeWidth="1.5" />
+                        <path d="M 55,50 A 25,25 0 0,0 55,100" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2,2" />
+                        <path d="M 55,50 A 25,25 0 0,1 55,100" fill="none" stroke="white" strokeWidth="1.5" />
+                        <path d="M 5,15 L 40,15 A 60,60 0 0,1 40,135 L 5,135" fill="none" stroke="white" strokeWidth="1.5" />
+                        <line x1="15" y1="63" x2="15" y2="87" stroke="white" strokeWidth="2.5" />
+                        <line x1="5" y1="75" x2="15" y2="75" stroke="white" strokeWidth="1" />
+                        <circle cx="18" cy="75" r="4.5" fill="none" stroke="#ff5500" strokeWidth="2.2" />
 
-                        {/* RIGHT COURT HALF LINES */}
-                        <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="2.5" />
-                        <path d="M 521,150 A 25,25 0 0,0 521,195" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                        <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="2" />
-                        <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
-                        <path d="M 540,45 L 470,45 A 125,125 0 0,0 470,295 L 540,295" fill="none" stroke="white" strokeWidth="2.2" />
-                        <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="3" />
-                        <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="1.5" />
-                        <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
+                        {/* RIGHT HALF COURT KEY & HOOP */}
+                        <line x1="225" y1="50" x2="225" y2="100" stroke="white" strokeWidth="1.5" />
+                        <path d="M 225,50 A 25,25 0 0,1 225,100" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2,2" />
+                        <path d="M 225,50 A 25,25 0 0,0 225,100" fill="none" stroke="white" strokeWidth="1.5" />
+                        <path d="M 275,15 L 240,15 A 60,60 0 0,0 240,135 L 275,135" fill="none" stroke="white" strokeWidth="1.5" />
+                        <line x1="265" y1="63" x2="265" y2="87" stroke="white" strokeWidth="2.5" />
+                        <line x1="275" y1="75" x2="265" y2="75" stroke="white" strokeWidth="1" />
+                        <circle cx="262" cy="75" r="4.5" fill="none" stroke="#ff5500" strokeWidth="2.2" />
 
-                        {/* Hashmarks */}
-                        <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="1.8" />
-                        <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="1.8" />
-                        <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="1.8" />
-                        <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="1.8" />
-
-                        {/* Bench boxes */}
-                        <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                        {/* Bench Zones along sidelines */}
+                        <rect x="145" y="15" width="15" height="30" fill="#dfd0c0" stroke="#bdaea0" strokeWidth="0.8" rx="3" />
+                        <rect x="145" y="60" width="15" height="30" fill="#ebd9c8" stroke="#bdaea0" strokeWidth="0.8" rx="3" />
+                        <rect x="145" y="105" width="15" height="30" fill="#dfd0c0" stroke="#bdaea0" strokeWidth="0.8" rx="3" />
                       </g>
                     )}
 
-                    {/* Watermarked Bench Texts */}
-                    {isPortrait ? (
-                      <g>
-                        <text x="90" y="348" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench Area</text>
-                        <text x="190" y="348" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Sub Box</text>
-                        <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench Area</text>
-                      </g>
-                    ) : (
-                      <g>
-                        <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
-                        <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substitution box</text>
-                        <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+                    {/* Bench area overlays */}
+                    {showDiagramLabels && (
+                      <g opacity="0.4">
+                        <style>{`
+                          .sh-lbl { font-family: sans-serif; font-size: 5px; font-weight: bold; fill: #4a3420; text-anchor: middle; }
+                        `}</style>
+                        {isPortrait ? (
+                          <>
+                            <text x="30" y="154" className="sh-lbl">Bench Area</text>
+                            <text x="75" y="154" className="sh-lbl">Sub Box</text>
+                            <text x="120" y="154" className="sh-lbl">Bench Area</text>
+                          </>
+                        ) : (
+                          <>
+                            <text x="152.5" y="32" className="sh-lbl" transform="rotate(-90 152.5 32)">Bench Area</text>
+                            <text x="152.5" y="77" className="sh-lbl" transform="rotate(-90 152.5 77)">Sub Box</text>
+                            <text x="152.5" y="122" className="sh-lbl" transform="rotate(-90 152.5 122)">Bench Area</text>
+                          </>
+                        )}
                       </g>
                     )}
 
-                    {/* RENDERING COMPLETE FREEHAND DRAWINGS [1] */}
+                    {/* RENDER ALL REGISTERED TACTICAL LINES */}
                     {drawings.map(drawing => (
                       <polyline
                         key={drawing.id}
@@ -1427,7 +1288,7 @@ export const BasketballBoard: React.FC = () => {
                       />
                     ))}
 
-                    {/* RENDERING ACTIVE DRAG DRAWING IN PROGRESS [1] */}
+                    {/* CURRENT DRAG PATH */}
                     {currentDrawingPoints.length > 1 && (
                       <polyline
                         points={getSvgPoints(currentDrawingPoints)}
@@ -1439,57 +1300,9 @@ export const BasketballBoard: React.FC = () => {
                         opacity="0.9"
                       />
                     )}
-
-                    {/* DIAGRAM LABELS */}
-                    {showDiagramLabels && (
-                      <g className="transition-opacity duration-300 opacity-95">
-                        <style>{`
-                          .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
-                        `}</style>
-                        {isPortrait ? (
-                          // Vertical Court Labels [1]
-                          <>
-                            <text x="40" y="55" className="diag-lbl" textAnchor="start">Corner</text>
-                            <text x="290" y="55" className="diag-lbl" textAnchor="end">Corner</text>
-                            <text x="100" y="55" className="diag-lbl" textAnchor="start">Short Corner</text>
-                            <text x="125" y="100" className="diag-lbl" textAnchor="end">Low Post / Block</text>
-                            <text x="160" y="73" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                            <text x="115" y="145" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
-                            <text x="174" y="205" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                            <text x="75" y="180" className="diag-lbl" textAnchor="middle">Wing</text>
-                            <text x="120" y="290" className="diag-lbl" textAnchor="middle">Center circle</text>
-                            <text x="55" y="290" className="diag-lbl" textAnchor="middle">Half-court line</text>
-                            <text x="25" y="290" className="diag-lbl" textAnchor="middle" transform="rotate(-90 25 290)">Sideline</text>
-                            <text x="174" y="15" className="diag-lbl" textAnchor="middle">Baseline or Endline</text>
-                            {/* Paint details */}
-                            <text x="165" y="105" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
-                            <text x="90" y="215" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
-                          </>
-                        ) : (
-                          // Horizontal Court Labels [1]
-                          <>
-                            <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
-                            <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
-                            <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
-                            <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
-                            <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                            <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
-                            <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                            <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
-                            <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
-                            <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
-                            <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
-                            <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
-                            {/* Paint details */}
-                            <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
-                            <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
-                          </>
-                        )}
-                      </g>
-                    )}
                   </svg>
 
-                  {/* 2. DRAGGABLE COURT PLAYER TOKENS */}
+                  {/* ACTIVE & BENCH COURT PLAYER TOKENS */}
                   {[
                     ...homePlayers,
                     ...awayPlayers
@@ -1498,161 +1311,32 @@ export const BasketballBoard: React.FC = () => {
                       onPointerDown={e => handleCourtPointerDown(e, player.id)}
                       onPointerMove={e => handleCourtPointerMove(e, player.id)}
                       onPointerUp={e => handleCourtPointerUp(e, player.id)}
-                      onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
+                      onPointerCancel={e => handleCourtPointerUp(e, player.id)}
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${
+                        isViewer ? '' : 'cursor-grab active:cursor-grabbing'
+                      } ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
                       style={{ 
-                        left: `${isPortrait ? player.y : player.x}%`, // Transpose coordinates depending on device rotation [1]
+                        left: `${isPortrait ? player.y : player.x}%`, 
                         top: `${isPortrait ? player.x : player.y}%`, 
                         transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
-                        pointerEvents: activeTool === 'move' ? 'auto' : 'none' // Disables tokens pointer capture in Draw Mode [1]
+                        pointerEvents: activeTool === 'move' ? 'auto' : 'none'
                       }}>
-                      <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
+                      <div className={`w-8 h-8 md:w-9 md:h-9 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs ${
                         player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                       } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
                         {player.number}
                       </div>
-                      <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
+                      <span className="text-[10px] bg-black/85 px-1 py-0.5 rounded text-white mt-0.5 max-w-[50px] truncate leading-none">
                         {player.name}
                       </span>
                     </div>
                   ))}
 
-                  {/* 3. ADAPTIVE DRAWING SIDEBAR TOOLBAR (TOP OR RIGHT SIDES ACCORDING TO SCREEN SIZE) [1] */}
-                  {!isViewer && (
-                    <div className={`absolute p-1.5 bg-slate-900/90 border border-slate-700/50 rounded-xl shadow-2xl z-20 select-none flex ${
-                      isPortrait 
-                        ? 'left-1/2 top-3 -translate-x-1/2 flex-row items-center gap-2.5 w-auto max-h-12' // Horizontal top layout for vertical court [1]
-                        : 'right-3 top-1/2 -translate-y-1/2 flex-col gap-2' // Right vertical layout for horizontal court [1]
-                    }`}>
-                      {/* Move Tool */}
-                      <button
-                        onClick={() => setActiveTool('move')}
-                        title="Move Players"
-                        className={`p-2 rounded-lg transition-colors ${
-                          activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Move size={16} />
-                      </button>
-
-                      {/* Draw Tool */}
-                      <button
-                        onClick={() => setActiveTool('draw')}
-                        title="Draw Lines"
-                        className={`p-2 rounded-lg transition-colors ${
-                          activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Pencil size={16} />
-                      </button>
-
-                      {/* Erase Tool */}
-                      <button
-                        onClick={() => setActiveTool('erase')}
-                        title="Eraser"
-                        className={`p-2 rounded-lg transition-colors ${
-                          activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Eraser size={16} />
-                      </button>
-
-                      <div className={`border-slate-700/50 ${isPortrait ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'}`} />
-
-                      {/* Clear All Drawings */}
-                      <button
-                        onClick={() => {
-                          setDrawings([]);
-                          setCurrentDrawingPoints([]);
-                        }}
-                        title="Clear All Drawings"
-                        className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-
-                      {/* Color Palette (only visible when in Draw mode) */}
-                      {activeTool === 'draw' && (
-                        <>
-                          <div className={`border-slate-700/50 ${isPortrait ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'}`} />
-                          <div className={`flex items-center gap-1.5 py-1 ${isPortrait ? 'flex-row px-1' : 'flex-col'}`}>
-                            {[
-                              ['#ff4444', 'bg-red-500'],
-                              ['#3b82f6', 'bg-blue-500'],
-                              ['#ffffff', 'bg-white border border-slate-600']
-                            ].map(([colorCode, bgClass]) => (
-                              <button
-                                key={colorCode}
-                                onClick={() => setStrokeColor(colorCode)}
-                                className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
-                                  strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                      {/* Pen Size Selector (Draw mode only) */}
-                      {activeTool === 'draw' && (
-                        <>
-                          <div className={`border-slate-700/50 ${isPortrait ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'}`} />
-                          <div className={`flex items-center gap-1 py-1 ${isPortrait ? 'flex-row px-1' : 'flex-col'}`}>
-                            {([
-                              [2, 'w-1.5 h-1.5'],
-                              [4, 'w-2.5 h-2.5'],
-                              [8, 'w-3.5 h-3.5'],
-                              [14, 'w-4.5 h-4.5']
-                            ] as const).map(([size, sizeClass]) => (
-                              <button
-                                key={size}
-                                onClick={() => setPenSize(size)}
-                                title={`Pen Size: ${size}`}
-                                className="flex items-center justify-center w-5 h-5 rounded hover:bg-slate-800 transition-colors"
-                              >
-                                <span className={`rounded-full bg-slate-400 ${sizeClass} ${
-                                  penSize === size ? 'bg-amber-400 ring-2 ring-amber-400' : ''
-                                }`} />
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                      {/* Eraser Size Selector (Erase mode only) */}
-                      {activeTool === 'erase' && (
-                        <>
-                          <div className={`border-slate-700/50 ${isPortrait ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'}`} />
-                          <div className={`flex items-center gap-1 py-1 ${isPortrait ? 'flex-row px-1' : 'flex-col'}`}>
-                            {([
-                              [4, 'w-1.5 h-1.5'],
-                              [8, 'w-2.5 h-2.5'],
-                              [15, 'w-3.5 h-3.5'],
-                              [24, 'w-4.5 h-4.5']
-                            ] as const).map(([size, sizeClass]) => (
-                              <button
-                                key={size}
-                                onClick={() => setEraserSize(size)}
-                                title={`Eraser Size: ${size}`}
-                                className="flex items-center justify-center w-5 h-5 rounded hover:bg-slate-800 transition-colors"
-                              >
-                                <span className={`rounded bg-slate-400 ${sizeClass} ${
-                                  eraserSize === size ? 'bg-amber-400 ring-2 ring-amber-400' : ''
-                                }`} />
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                    </div>
-                  )}
-
                 </div>
               </div>
             </div>
             
-            <p className="text-center text-xs text-slate-500 italic">💡 Tactical positioning is completely independent of scoreboard roster statuses.</p>
+            <p className="text-center text-xs text-slate-500 italic">💡 The top edit bar will shift automatically to fit desktop or tablet viewports.</p>
           </div>
         )}
 
@@ -1662,7 +1346,7 @@ export const BasketballBoard: React.FC = () => {
 };
 
 // ==========================================
-// ROSTER PANEL (DRAG & INSTANT CLICK TO SWAP)
+// ROSTER PANEL COMPONENT
 // ==========================================
 const RosterPanel: React.FC<{
   team: 'home' | 'away';
@@ -1714,70 +1398,63 @@ const RosterPanel: React.FC<{
           <span>Court: {courtPlayers.length}</span>
           <span className="text-slate-700">|</span>
           <span>Bench: {benchPlayers.length}</span>
-          <span className="text-slate-700">|</span>
-          <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click/drag to sub</span>
         </div>
       </div>
 
       <div className="p-3 space-y-3">
-        {/* Court */}
+        {/* Court Members */}
         <div>
-          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2 font-sans">Active On Court</span>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
                 <div key={player.id}
                   draggable={!isViewer}
-                  onContextMenu={e => e.preventDefault()}
                   onDragStart={e => onDragStart(e, player.id)}
                   onDrop={e => onDrop(e, player.id)}
                   onDragOver={e => onDragOver(e, player.id)}
                   onDragLeave={onDragLeave}
                   onClick={() => onSelectCourt(player.id)}
-                  className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
+                  className={`relative p-2 rounded-xl border flex flex-col items-center bg-slate-800/95 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
                     isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                  } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
-                    isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
-                  } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
+                  } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400' : 
+                    isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700'
+                  }`}>
 
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-xs md:text-sm mb-0.5 shadow-md ${
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-xs mb-1 shadow-md ${
                     isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
                   }`}>
-                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-xs" compact={true} disabled={isViewer} />
                   </div>
                   
                   <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                    className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
-                  <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
-                  <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
-                    <span className="text-xs md:text-sm">Fouls:</span>
-                    <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-bold text-sm md:text-base`}>{player.fouls}</span>
-                  </div>
+                    className="text-xs text-slate-300 font-semibold truncate max-w-[64px] sm:max-w-[72px]" />
+                  <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points} pts</div>
+                  <div className="text-[10px] text-slate-400 font-medium">Fouls: <span className="font-bold">{player.fouls}</span></div>
                   
                   {!isViewer && (
-                    <>
-                      <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
+                    <div className="flex flex-col gap-1.5 w-full mt-2">
+                      <div className="flex gap-1 w-full justify-center">
                         {[1, 2, 3].map(p => (
                           <button key={p}
                             onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                            className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
+                            className="bg-slate-700 hover:bg-slate-600 text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded text-white transition-colors">
                             +{p}
                           </button>
                         ))}
                       </div>
-                      
-                      <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
+                      <div className="flex gap-1 w-full justify-center">
                         <button
                           onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
-                          className="bg-red-900/60 hover:bg-red-800 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-red-300 transition-colors active:scale-95">+F</button>
+                          className="bg-red-900/60 hover:bg-red-850 text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded text-red-200 transition-colors">+F</button>
                         {player.fouls > 0 && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
-                            className="bg-slate-700/50 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-slate-400 transition-colors active:scale-95">-F</button>
+                            className="bg-slate-700 hover:bg-slate-600 text-[10px] font-bold w-6 h-6 flex items-center justify-center rounded text-slate-400 transition-colors">-F</button>
                         )}
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               );
@@ -1785,52 +1462,47 @@ const RosterPanel: React.FC<{
           </div>
         </div>
 
-        {/* Bench */}
+        {/* Bench Members */}
         <div>
-          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2 font-sans">Bench</span>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
             {benchPlayers.map(player => (
               <div key={player.id}
                 draggable={!isViewer}
-                onContextMenu={e => e.preventDefault()}
                 onDragStart={e => onDragStart(e, player.id)}
                 onDrop={e => onDrop(e, player.id)}
                 onDragOver={e => onDragOver(e, player.id)}
                 onDragLeave={onDragLeave}
                 onClick={() => onBenchClick(player.id)}
-                className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
-                  isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}
-                `}>
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
-                  isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
+                className={`relative p-2 rounded-xl border flex flex-col items-center transition-all ${
+                  isViewer ? '' : 'cursor-grab hover:scale-105 active:cursor-grabbing'
+                } ${isDragging(player.id) ? 'opacity-40' : ''} ${
+                  isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/10' : 'border-slate-800 bg-slate-800/20'
                 }`}>
-                  <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white/70 font-bold text-[10px] mb-1 ${
+                  isHome ? 'bg-red-950/60' : 'bg-blue-950/60'
+                }`}>
+                  <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-xs" compact={true} disabled={isViewer} />
                 </div>
                 <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                  className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
-                <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
+                  className="text-xs text-slate-400 truncate max-w-[64px]" />
+                <div className="text-[9px] text-slate-500">{player.points} pts</div>
               </div>
             ))}
           </div>
         </div>
             
-        {/* Player stats */}
+        {/* Cumulative Stats View */}
         <div>
-          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
-          <div className="flex items-center gap-4 text-xs">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2 font-sans">Active Scorers</span>
+          <div className="flex flex-wrap gap-2 text-xs">
             {teamScorers.length > 0 ? teamScorers.map(p => (
-              <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
-                  <InlineNumber num={p.number} onSave={(v) => onChangeNumber(team, p.id, v)} className="text-xs" compact={true} disabled={isViewer} />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5">Fouls: <span className={`font-bold ${p.fouls >= 4 ? 'text-red-400' : isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.fouls}</span></span>
-                </div>
-                <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
+              <div key={p.id} className={`flex items-center gap-2 px-2 py-1 rounded ${isHome ? 'bg-orange-950/20' : 'bg-blue-950/20'}`}>
+                <span className={`font-bold ${accentText}`}>#{p.number}</span>
+                <span className="text-slate-300 font-medium truncate max-w-[72px]">{p.name}</span>
+                <span className="text-slate-400">({p.points}pts, {p.fouls}F)</span>
               </div>
-            )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+            )) : <span className="text-[10px] text-slate-600 italic">No activity recorded yet</span>}
           </div>
         </div>
       </div>
