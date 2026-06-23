@@ -240,7 +240,7 @@ export const BasketballBoard: React.FC = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokeColor, setStrokeColor] = useState('#ff4444');
   const [penSize, setPenSize] = useState<number>(4);
-  const [eraserSize, setEraserSize] = useState<number>(8);
+  const [eraserSize, setEraserSize] = useState<number>(12);
   
   // Multi-Touch Pointer Drag Tracking Refs
   const activeDragsRef = useRef<Record<number, { 
@@ -1171,7 +1171,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
                     <div className="flex flex-col gap-1">
                       {homeScorers.length > 0 ? homeScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-950/10 border border-orange-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-950/10 border border-orange-700/20 px-2.5 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-amber-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
@@ -1315,344 +1315,421 @@ export const BasketballBoard: React.FC = () => {
             </div>
 
             {/* DIAGRAM COURT AND CONTROLS CARD */}
-            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex flex-col items-center gap-4">
+            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
               
-              {/* TOOLBAR CONTROL PANEL (OUTSIDE THE COURT WORKSPACE) [1] */}
-              {!isViewer && (
-                <div className="flex flex-row flex-wrap items-center justify-center gap-2 p-1.5 bg-slate-900/95 border border-slate-700/50 rounded-xl shadow-lg select-none">
-                  <button
-                    onClick={() => setActiveTool('move')}
-                    title="Move Players"
-                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
-                      activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                    }`}
+              <div className={`w-full flex gap-4 items-center justify-center ${
+                isVerticalView ? 'flex-col' : 'flex-col sm:flex-row-reverse'
+              }`}>
+                
+                {/* TOOLBAR CONTROL PANEL (OUTSIDE THE COURT WORKSPACE - ADAPTIVE ORIENTATION) [1] */}
+                {!isViewer && (
+                  <div className={`bg-slate-900/95 border border-slate-700/50 rounded-xl shadow-lg select-none ${
+                    isVerticalView 
+                      ? 'flex flex-row flex-wrap items-center justify-center gap-2 p-1.5 w-full max-w-[420px]' 
+                      : 'flex flex-col gap-2 p-2.5 items-center'
+                  }`}>
+                    {/* Move Tool */}
+                    <button
+                      onClick={() => setActiveTool('move')}
+                      title="Move Players"
+                      className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
+                      } font-bold ${
+                        activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Move size={15} /> {isVerticalView && 'Move'}
+                    </button>
+
+                    {/* Draw Tool */}
+                    <button
+                      onClick={() => setActiveTool('draw')}
+                      title="Draw Lines"
+                      className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
+                      } font-bold ${
+                        activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Pencil size={15} /> {isVerticalView && 'Draw'}
+                    </button>
+
+                    {/* Erase Tool */}
+                    <button
+                      onClick={() => setActiveTool('erase')}
+                      title="Eraser"
+                      className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
+                      } font-bold ${
+                        activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Eraser size={15} /> {isVerticalView && 'Erase'}
+                    </button>
+
+                    <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
+
+                    {/* Clear All Drawings */}
+                    <button
+                      onClick={() => {
+                        setDrawings([]);
+                        setCurrentDrawingPoints([]);
+                      }}
+                      title="Clear All Drawings"
+                      className={`p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors flex items-center justify-center ${
+                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
+                      } font-bold`}
+                    >
+                      <Trash2 size={15} /> {isVerticalView && 'Clear'}
+                    </button>
+
+                    {/* Active Draw Settings (Color Selector + Pen Size Selector) [1] */}
+                    {activeTool === 'draw' && (
+                      <>
+                        <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
+                        
+                        {/* Color Palette */}
+                        <div className={`flex items-center gap-1.5 ${isVerticalView ? 'flex-row px-1' : 'flex-col py-1'}`}>
+                          {[
+                            ['#ff4444', 'bg-red-500'],
+                            ['#3b82f6', 'bg-blue-500'],
+                            ['#ffffff', 'bg-white border border-slate-600']
+                          ].map(([colorCode, bgClass]) => (
+                            <button
+                              key={colorCode}
+                              onClick={() => setStrokeColor(colorCode)}
+                              className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
+                                strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
+
+                        {/* Pen Size Selection Dots [1] */}
+                        <div className={`flex items-center gap-1.5 ${isVerticalView ? 'flex-row' : 'flex-col'}`}>
+                          {[2, 4, 8].map(sz => (
+                            <button
+                              key={sz}
+                              onClick={() => setPenSize(sz)}
+                              title={`${sz}px Stroke`}
+                              className={`rounded hover:bg-slate-800 transition-all flex items-center justify-center ${
+                                isVerticalView ? 'w-6 h-6' : 'w-7 h-7'
+                              } ${penSize === sz ? 'bg-amber-500/20 border border-amber-500' : 'border border-transparent'}`}
+                            >
+                              <span 
+                                className="bg-slate-300 rounded-full" 
+                                style={{ width: `${sz}px`, height: `${sz}px` }} 
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Active Eraser Settings (Eraser Size Selector) [1] */}
+                    {activeTool === 'erase' && (
+                      <>
+                        <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
+                        
+                        {/* Eraser Size Selection Boxes [1] */}
+                        <div className={`flex items-center gap-1.5 ${isVerticalView ? 'flex-row' : 'flex-col'}`}>
+                          {[6, 12, 20].map(sz => (
+                            <button
+                              key={sz}
+                              onClick={() => setEraserSize(sz)}
+                              title={`Eraser Size: ${sz}px`}
+                              className={`rounded hover:bg-slate-800 transition-all flex items-center justify-center ${
+                                isVerticalView ? 'w-6 h-6' : 'w-7 h-7'
+                              } ${eraserSize === sz ? 'bg-amber-500/20 border border-amber-500' : 'border border-transparent'}`}
+                            >
+                              <span 
+                                className="bg-slate-400 rounded-sm" 
+                                style={{ 
+                                  width: `${clamp(sz * 0.7, 4, 12)}px`, 
+                                  height: `${clamp(sz * 0.7, 4, 12)}px` 
+                                }} 
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                  </div>
+                )}
+
+                {/* COURT SVG PANEL WORKSPACE */}
+                <div className="w-full relative flex justify-center">
+                  <div ref={courtRef}
+                    onPointerDown={handleCourtBgPointerDown}
+                    onPointerMove={handleCourtBgPointerMove}
+                    onPointerUp={handleCourtBgPointerUp}
+                    onPointerCancel={handleCourtBgPointerUp}
+                    className={`relative w-full rounded-xl overflow-hidden select-none border-[3px] border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
+                      isVerticalView 
+                        ? 'aspect-[38/58] max-w-[420px] mx-auto' 
+                        : 'min-w-[560px] md:min-w-0 aspect-[58/38]'
+                    } ${courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'}`}
+                    style={{ backgroundColor: '#fdd2ab' }}
                   >
-                    <Move size={15} /> Move
-                  </button>
+                    
+                    {isVerticalView ? (
+                      // ==================================================
+                      // 1. VERTICAL VIEW SVG (ViewBox: 380 x 580)
+                      // ==================================================
+                      <svg viewBox="0 0 380 580" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                        <rect x="0" y="0" width="380" height="510" fill="#fdd2ab" />
+                        <rect x="0" y="510" width="380" height="70" fill="#dfd0c0" />
+                        <rect x="140" y="10" width="100" height="100" fill="#f2913f" />
+                        <rect x="140" y="410" width="100" height="100" fill="#f2913f" />
+                        
+                        {/* Court Boundary Lines (Thicker stroke width) */}
+                        <rect x="50" y="10" width="280" height="500" fill="none" stroke="white" strokeWidth="3.5" />
+                        <line x1="50" y1="260" x2="330" y2="260" stroke="white" strokeWidth="3.5" />
+                        
+                        {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                        <circle cx="190" cy="260" r="28" fill="none" stroke="white" strokeWidth="3" />
+                        <circle cx="190" cy="260" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
 
-                  <button
-                    onClick={() => setActiveTool('draw')}
-                    title="Draw Lines"
-                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
-                      activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                    }`}
-                  >
-                    <Pencil size={15} /> Draw
-                  </button>
+                        {/* TOP BASKET ZONE (Wider corner three-point area, thicker strokes) [1] */}
+                        <line x1="140" y1="110" x2="240" y2="110" stroke="white" strokeWidth="3.5" />
+                        <path d="M 170,29 A 20,20 0 0,0 210,29" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                        <path d="M 140,110 A 50,50 0 0,0 240,110" fill="none" stroke="white" strokeWidth="3" />
+                        <path d="M 140,110 A 50,50 0 0,1 240,110" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                        <path d="M 75,10 L 75,80 A 115,115 0 0,0 305,80 L 305,10" fill="none" stroke="white" strokeWidth="3.2" />
+                        <line x1="160" y1="22" x2="220" y2="22" stroke="white" strokeWidth="4" />
+                        <line x1="190" y1="10" x2="190" y2="22" stroke="white" strokeWidth="2" />
+                        <circle cx="190" cy="29" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                  <button
-                    onClick={() => setActiveTool('erase')}
-                    title="Eraser"
-                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
-                      activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                    }`}
-                  >
-                    <Eraser size={15} /> Eraser
-                  </button>
+                        {/* BOTTOM BASKET ZONE (Wider corner three-point area, thicker strokes) [1] */}
+                        <line x1="140" y1="410" x2="240" y2="410" stroke="white" strokeWidth="2.5" />
+                        <path d="M 170,491 A 20,20 0 0,1 210,491" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                        <path d="M 140,410 A 50,50 0 0,1 240,410" fill="none" stroke="white" strokeWidth="3" />
+                        <path d="M 140,410 A 50,50 0 0,0 240,410" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                        <path d="M 75,510 L 75,440 A 115,115 0 0,1 305,440 L 305,510" fill="none" stroke="white" strokeWidth="3.2" />
+                        <line x1="160" y1="498" x2="220" y2="498" stroke="white" strokeWidth="4" />
+                        <line x1="190" y1="510" x2="190" y2="498" stroke="white" strokeWidth="2" />
+                        <circle cx="190" cy="491" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                  <div className="border-l h-6 mx-1 border-slate-700/50" />
+                        {/* Hashmarks */}
+                        <line x1="50" y1="170" x2="60" y2="170" stroke="white" strokeWidth="2" />
+                        <line x1="50" y1="350" x2="60" y2="350" stroke="white" strokeWidth="2" />
+                        <line x1="320" y1="170" x2="330" y2="170" stroke="white" strokeWidth="2" />
+                        <line x1="320" y1="350" x2="330" y2="350" stroke="white" strokeWidth="2" />
 
-                  <button
-                    onClick={() => {
-                      setDrawings([]);
-                      setCurrentDrawingPoints([]);
-                    }}
-                    title="Clear All Drawings"
-                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                        {/* Bench Graphic Outlines */}
+                        <rect x="20" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                        <rect x="150" y="525" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                        <rect x="250" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
 
-                  {activeTool === 'draw' && (
-                    <>
-                      <div className="border-l h-6 mx-1 border-slate-700/50" />
-                      <div className="flex items-center gap-1.5 flex-row px-1">
-                        {[
-                          ['#ff4444', 'bg-red-500'],
-                          ['#3b82f6', 'bg-blue-500'],
-                          ['#ffffff', 'bg-white border border-slate-600']
-                        ].map(([colorCode, bgClass]) => (
-                          <button
-                            key={colorCode}
-                            onClick={() => setStrokeColor(colorCode)}
-                            className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
-                              strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
-                            }`}
+                        <text x="75" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+                        <text x="190" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Sub Box</text>
+                        <text x="305" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+
+                        {/* Render drawings projected vertically with customizable stroke size [1] */}
+                        {drawings.map(drawing => (
+                          <polyline
+                            key={drawing.id}
+                            points={projectDrawings(drawing.points, true)}
+                            fill="none"
+                            stroke={drawing.color}
+                            strokeWidth={drawing.width || 4}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.9"
                           />
                         ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
 
-              {/* DIAGRAM PANEL */}
-              <div className="w-full relative">
-                <div ref={courtRef}
-                  onPointerDown={handleCourtBgPointerDown}
-                  onPointerMove={handleCourtBgPointerMove}
-                  onPointerUp={handleCourtBgPointerUp}
-                  onPointerCancel={handleCourtBgPointerUp}
-                  className={`relative w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
-                    isVerticalView 
-                      ? 'aspect-[38/58] max-w-[420px] mx-auto' 
-                      : 'min-w-[560px] md:min-w-0 aspect-[58/38]'
-                  } ${courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'}`}
-                  style={{ backgroundColor: '#fdd2ab' }}
-                >
-                  
-                  {isVerticalView ? (
-                    // ==================================================
-                    // 1. VERTICAL VIEW SVG (ViewBox: 380 x 580) [1]
-                    // ==================================================
-                    <svg viewBox="0 0 380 580" className="w-full h-full absolute inset-0 pointer-events-none select-none">
-                      <rect x="0" y="0" width="380" height="510" fill="#fdd2ab" />
-                      <rect x="0" y="510" width="380" height="70" fill="#dfd0c0" />
-                      <rect x="140" y="10" width="100" height="100" fill="#f2913f" />
-                      <rect x="140" y="410" width="100" height="100" fill="#f2913f" />
-                      
-                      {/* Court Boundary Lines (Thicker stroke) */}
-                      <rect x="50" y="10" width="280" height="500" fill="none" stroke="white" strokeWidth="3.5" />
-                      <line x1="50" y1="260" x2="330" y2="260" stroke="white" strokeWidth="3.5" />
-                      
-                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
-                      <circle cx="190" cy="260" r="28" fill="none" stroke="white" strokeWidth="3" />
-                      <circle cx="190" cy="260" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
+                        {currentDrawingPoints.length > 1 && (
+                          <polyline
+                            points={projectDrawings(currentDrawingPoints, true)}
+                            fill="none"
+                            stroke={strokeColor}
+                            strokeWidth={penSize}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.9"
+                          />
+                        )}
 
-                      {/* TOP BASKET ZONE (Thicker stroke, wider corner three-point area) [1] */}
-                      <line x1="140" y1="110" x2="240" y2="110" stroke="white" strokeWidth="3.5" />
-                      <path d="M 170,29 A 20,20 0 0,0 210,29" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
-                      <path d="M 140,110 A 50,50 0 0,0 240,110" fill="none" stroke="white" strokeWidth="3" />
-                      <path d="M 140,110 A 50,50 0 0,1 240,110" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                      <path d="M 75,10 L 75,80 A 115,115 0 0,0 305,80 L 305,10" fill="none" stroke="white" strokeWidth="3.2" />
-                      <line x1="160" y1="22" x2="220" y2="22" stroke="white" strokeWidth="4" />
-                      <line x1="190" y1="10" x2="190" y2="22" stroke="white" strokeWidth="2" />
-                      <circle cx="190" cy="29" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+                        {/* Vertical Labels */}
+                        {showDiagramLabels && (
+                          <g className="transition-opacity duration-300 opacity-95">
+                            <style>{`
+                              .diag-lbl { font-family: sans-serif; font-size: 9px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                            `}</style>
+                            <text x="65" y="25" className="diag-lbl" textAnchor="start">Corner</text>
+                            <text x="315" y="25" className="diag-lbl" textAnchor="end">Corner</text>
+                            <text x="65" y="495" className="diag-lbl" textAnchor="start">Corner</text>
+                            <text x="315" y="495" className="diag-lbl" textAnchor="end">Corner</text>
+                            
+                            <text x="140" y="125" className="diag-lbl" textAnchor="end">Elbow</text>
+                            <text x="240" y="125" className="diag-lbl" textAnchor="start">Elbow</text>
+                            <text x="140" y="395" className="diag-lbl" textAnchor="end">Elbow</text>
+                            <text x="240" y="395" className="diag-lbl" textAnchor="start">Elbow</text>
+                            
+                            <text x="190" y="70" className="diag-lbl" textAnchor="middle">Painted Area</text>
+                            <text x="190" y="455" className="diag-lbl" textAnchor="middle">Painted Area</text>
 
-                      {/* BOTTOM BASKET ZONE (Thicker lines, wider corner three-point area) [1] */}
-                      <line x1="140" y1="410" x2="240" y2="410" stroke="white" strokeWidth="2.5" />
-                      <path d="M 170,491 A 20,20 0 0,1 210,491" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                      <path d="M 140,410 A 50,50 0 0,1 240,410" fill="none" stroke="white" strokeWidth="3" />
-                      <path d="M 140,410 A 50,50 0 0,0 240,410" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                      <path d="M 75,510 L 75,440 A 115,115 0 0,1 305,440 L 305,510" fill="none" stroke="white" strokeWidth="3.2" />
-                      <line x1="160" y1="498" x2="220" y2="498" stroke="white" strokeWidth="4" />
-                      <line x1="190" y1="510" x2="190" y2="498" stroke="white" strokeWidth="2" />
-                      <circle cx="190" cy="491" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+                            <text x="190" y="170" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                            <text x="190" y="350" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                            
+                            <text x="190" y="270" className="diag-lbl" textAnchor="middle">Center Circle</text>
+                            <text x="190" y="250" className="diag-lbl" textAnchor="middle">Half-Court Line</text>
+                            <text x="45" y="260" className="diag-lbl" textAnchor="middle" transform="rotate(-90 45 260)">Sideline</text>
+                            <text x="190" y="505" className="diag-lbl" textAnchor="middle">Baseline</text>
+                          </g>
+                        )}
+                      </svg>
+                    ) : (
+                      // ==================================================
+                      // 2. HORIZONTAL VIEW SVG (ViewBox: 580 x 380)
+                      // ==================================================
+                      <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                        <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
+                        <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
+                        <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
+                        <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
 
-                      {/* Hashmarks */}
-                      <line x1="50" y1="170" x2="60" y2="170" stroke="white" strokeWidth="2" />
-                      <line x1="50" y1="350" x2="60" y2="350" stroke="white" strokeWidth="2" />
-                      <line x1="320" y1="170" x2="330" y2="170" stroke="white" strokeWidth="2" />
-                      <line x1="320" y1="350" x2="330" y2="350" stroke="white" strokeWidth="2" />
+                        {/* Outer Court Lines (Thicker stroke) */}
+                        <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="3.5" />
+                        <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="3.5" />
+                        
+                        {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                        <circle cx="290" cy="170" r="28" fill="none" stroke="white" strokeWidth="3" />
+                        <circle cx="290" cy="170" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
 
-                      {/* Bench Graphic Outlines */}
-                      <rect x="20" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                      <rect x="150" y="525" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                      <rect x="250" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                        {/* Left Basket area lines (Wider corner three-point area, thicker strokes) [1] */}
+                        <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="3.5" />
+                        <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                        <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="3" />
+                        <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                        <path d="M 40,60 L 110,60 A 110,110 0 0,1 110,280 L 40,280" fill="none" stroke="white" strokeWidth="3.2" />
+                        <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="4" />
+                        <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="2" />
+                        <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                      <text x="75" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
-                      <text x="190" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Sub Box</text>
-                      <text x="305" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+                        {/* Right Basket area lines (Wider corner three-point area, thicker strokes) [1] */}
+                        <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="3.5" />
+                        <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                        <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="3" />
+                        <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                        <path d="M 540,60 L 470,60 A 110,110 0 0,0 470,280 L 540,280" fill="none" stroke="white" strokeWidth="3.2" />
+                        <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="4" />
+                        <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="2" />
+                        <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                      {/* Render drawings projected vertically */}
-                      {drawings.map(drawing => (
-                        <polyline
-                          key={drawing.id}
-                          points={projectDrawings(drawing.points, true)}
-                          fill="none"
-                          stroke={drawing.color}
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          opacity="0.9"
-                        />
-                      ))}
+                        <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="2" />
+                        <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="2" />
+                        <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="2" />
+                        <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="2" />
 
-                      {currentDrawingPoints.length > 1 && (
-                        <polyline
-                          points={projectDrawings(currentDrawingPoints, true)}
-                          fill="none"
-                          stroke={strokeColor}
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          opacity="0.9"
-                        />
-                      )}
+                        <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                        <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                        <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
 
-                      {/* Vertical Labels */}
-                      {showDiagramLabels && (
-                        <g className="transition-opacity duration-300 opacity-95">
-                          <style>{`
-                            .diag-lbl { font-family: sans-serif; font-size: 9px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
-                          `}</style>
-                          <text x="65" y="25" className="diag-lbl" textAnchor="start">Corner</text>
-                          <text x="315" y="25" className="diag-lbl" textAnchor="end">Corner</text>
-                          <text x="65" y="495" className="diag-lbl" textAnchor="start">Corner</text>
-                          <text x="315" y="495" className="diag-lbl" textAnchor="end">Corner</text>
-                          
-                          <text x="140" y="125" className="diag-lbl" textAnchor="end">Elbow</text>
-                          <text x="240" y="125" className="diag-lbl" textAnchor="start">Elbow</text>
-                          <text x="140" y="395" className="diag-lbl" textAnchor="end">Elbow</text>
-                          <text x="240" y="395" className="diag-lbl" textAnchor="start">Elbow</text>
-                          
-                          <text x="190" y="70" className="diag-lbl" textAnchor="middle">Painted Area</text>
-                          <text x="190" y="455" className="diag-lbl" textAnchor="middle">Painted Area</text>
+                        <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+                        <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substitution box</text>
+                        <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
 
-                          <text x="190" y="170" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                          <text x="190" y="350" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                          
-                          <text x="190" y="270" className="diag-lbl" textAnchor="middle">Center Circle</text>
-                          <text x="190" y="250" className="diag-lbl" textAnchor="middle">Half-Court Line</text>
-                          <text x="45" y="260" className="diag-lbl" textAnchor="middle" transform="rotate(-90 45 260)">Sideline</text>
-                          <text x="190" y="505" className="diag-lbl" textAnchor="middle">Baseline</text>
-                        </g>
-                      )}
-                    </svg>
-                  ) : (
-                    // ==================================================
-                    // 2. HORIZONTAL VIEW SVG (ViewBox: 580 x 380) [1]
-                    // ==================================================
-                    <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
-                      <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
-                      <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
-                      <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
-                      <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
+                        {/* Render drawings projected horizontally with customizable stroke size [1] */}
+                        {drawings.map(drawing => (
+                          <polyline
+                            key={drawing.id}
+                            points={projectDrawings(drawing.points, false)}
+                            fill="none"
+                            stroke={drawing.color}
+                            strokeWidth={drawing.width || 4}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.9"
+                          />
+                        ))}
 
-                      {/* Outer Court Lines (Thicker stroke) */}
-                      <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="3.5" />
-                      <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="3.5" />
-                      
-                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
-                      <circle cx="290" cy="170" r="28" fill="none" stroke="white" strokeWidth="3" />
-                      <circle cx="290" cy="170" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
+                        {currentDrawingPoints.length > 1 && (
+                          <polyline
+                            points={projectDrawings(currentDrawingPoints, false)}
+                            fill="none"
+                            stroke={strokeColor}
+                            strokeWidth={penSize}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.9"
+                          />
+                        )}
 
-                      {/* Basket area lines (Wider corner three-point area) [1] */}
-                      <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="3.5" />
-                      <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
-                      <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="3" />
-                      <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                      <path d="M 40,60 L 110,60 A 110,110 0 0,1 110,280 L 40,280" fill="none" stroke="white" strokeWidth="3.2" />
-                      <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="4" />
-                      <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="2" />
-                      <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+                        {showDiagramLabels && (
+                          <g className="transition-opacity duration-300 opacity-95">
+                            <style>{`
+                              .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                            `}</style>
+                            <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
+                            <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
+                            <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
+                            
+                            <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
+                            <text x="480" y="125" className="diag-lbl" textAnchor="start">Low Post / Block</text>
+                            
+                            <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                            <text x="507" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                            
+                            <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
+                            <text x="435" y="115" className="diag-lbl" textAnchor="start">High Post / Elbow</text>
+                            
+                            <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                            <text x="375" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                            
+                            <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+                            <text x="400" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
 
-                      {/* Right-hand side Basket area lines (Wider corner three-point area) [1] */}
-                      <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="3.5" />
-                      <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
-                      <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="3" />
-                      <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                      <path d="M 540,60 L 470,60 A 110,110 0 0,0 470,280 L 540,280" fill="none" stroke="white" strokeWidth="3.2" />
-                      <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="4" />
-                      <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="2" />
-                      <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+                            <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
+                            <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
+                            <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
+                            <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
 
-                      <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="2" />
-                      <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="2" />
-                      <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="2" />
-                      <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="2" />
+                            <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
+                            <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
+                          </g>
+                        )}
+                      </svg>
+                    )}
 
-                      <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                      <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                      <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-
-                      <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
-                      <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substitution box</text>
-                      <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
-
-                      {drawings.map(drawing => (
-                        <polyline
-                          key={drawing.id}
-                          points={projectDrawings(drawing.points, false)}
-                          fill="none"
-                          stroke={drawing.color}
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          opacity="0.9"
-                        />
-                      ))}
-
-                      {currentDrawingPoints.length > 1 && (
-                        <polyline
-                          points={projectDrawings(currentDrawingPoints, false)}
-                          fill="none"
-                          stroke={strokeColor}
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          opacity="0.9"
-                        />
-                      )}
-
-                      {showDiagramLabels && (
-                        <g className="transition-opacity duration-300 opacity-95">
-                          <style>{`
-                            .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
-                          `}</style>
-                          <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
-                          <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
-                          <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
-                          
-                          <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
-                          <text x="480" y="125" className="diag-lbl" textAnchor="start">Low Post / Block</text>
-                          
-                          <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                          <text x="507" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                          
-                          <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
-                          <text x="435" y="115" className="diag-lbl" textAnchor="start">High Post / Elbow</text>
-                          
-                          <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                          <text x="375" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                          
-                          <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
-                          <text x="400" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
-
-                          <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
-                          <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
-                          <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
-                          <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
-
-                          <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
-                          <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
-                        </g>
-                      )}
-                    </svg>
-                  )}
-
-                  {/* ACTIVE PRESENTATION PLAYER TOKENS */}
-                  {[
-                    ...homePlayers,
-                    ...awayPlayers
-                  ].map(player => {
-                    const pos = getPlayerPos(player, isVerticalView);
-                    return (
-                      <div key={player.id}
-                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                        onPointerMove={e => handleCourtPointerMove(e, player.id)}
-                        onPointerUp={e => handleCourtPointerUp(e, player.id)}
-                        onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
-                        style={{ 
-                          left: `${pos.x}%`, 
-                          top: `${pos.y}%`, 
-                          transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
-                          pointerEvents: activeTool === 'move' ? 'auto' : 'none'
-                        }}>
-                        <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
-                          player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                        } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
-                          {player.number}
+                    {/* ACTIVE PRESENTATION PLAYER TOKENS */}
+                    {[
+                      ...homePlayers,
+                      ...awayPlayers
+                    ].map(player => {
+                      const pos = getPlayerPos(player, isVerticalView);
+                      return (
+                        <div key={player.id}
+                          onPointerDown={e => handleCourtPointerDown(e, player.id)}
+                          onPointerMove={e => handleCourtPointerMove(e, player.id)}
+                          onPointerUp={e => handleCourtPointerUp(e, player.id)}
+                          onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
+                          className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
+                          style={{ 
+                            left: `${pos.x}%`, 
+                            top: `${pos.y}%`, 
+                            transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
+                            pointerEvents: activeTool === 'move' ? 'auto' : 'none'
+                          }}>
+                          <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
+                            player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                          } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
+                            {player.number}
+                          </div>
+                          <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
+                            {player.name}
+                          </span>
                         </div>
-                        <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
-                          {player.name}
-                        </span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
 
+                  </div>
                 </div>
+
               </div>
             </div>
             
