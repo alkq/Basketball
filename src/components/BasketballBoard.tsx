@@ -127,7 +127,7 @@ const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; classNa
 };
 
 // ==========================================
-// HELPERS
+// HELPERS & MAPPERS
 // ==========================================
 const formatTime = (s: number) =>
   `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -142,7 +142,6 @@ const createHomePlayers = (): Player[] => [
   { id: 'h3', name: 'Vis',   number: 3, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 78 },
   { id: 'h4', name: 'Nan',   number: 4, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 30 },
   { id: 'h5', name: 'Shyong',number: 5, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 70 },
-  // Bench players initialized directly inside the bottom-left bench area box
   { id: 'h6', name: 'Dexter',number: 6, points: 0, fouls: 0, status: 'bench', team: 'home', x: 9.5, y: 91 },
   { id: 'h7', name: 'Cheng', number: 7, points: 0, fouls: 0, status: 'bench', team: 'home', x: 15.5, y: 91 },
   { id: 'h8', name: 'Vin',   number: 8, points: 0, fouls: 0, status: 'bench', team: 'home', x: 21.5, y: 91 },
@@ -156,7 +155,6 @@ const createAwayPlayers = (): Player[] => [
   { id: 'a3', name: 'Sheng',   number: 3, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 78 },
   { id: 'a4', name: 'Ping',    number: 4, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 30 },
   { id: 'a5', name: 'Ivan',    number: 5, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 70 },
-  // Bench players initialized directly inside the bottom-right bench area box
   { id: 'a6', name: 'Qian',    number: 6, points: 0, fouls: 0, status: 'bench', team: 'away', x: 64.5, y: 91 },
   { id: 'a7', name: 'Ren',     number: 7, points: 0, fouls: 0, status: 'bench', team: 'away', x: 70.5, y: 91 },
   { id: 'a8', name: 'Player 8',number: 8, points: 0, fouls: 0, status: 'bench', team: 'away', x: 76.5, y: 91 },
@@ -164,7 +162,7 @@ const createAwayPlayers = (): Player[] => [
   { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 88.5, y: 91 },
 ];
 
-// Helper to compute point-to-line segment distance for relative percentages [1]
+// Helper to compute point-to-line segment distance for relative percentages
 const getPointToSegmentDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -176,6 +174,37 @@ const getPointToSegmentDistance = (px: number, py: number, x1: number, y1: numbe
   const closestX = x1 + t * dx;
   const closestY = y1 + t * dy;
   return Math.sqrt(Math.pow(px - closestX, 2) + Math.pow(py - closestY, 2));
+};
+
+// Maps coordinate scales dynamically when viewing the court vertically [1]
+const getPlayerPos = (player: Player, isVertical: boolean) => {
+  if (!isVertical) {
+    return { x: player.x, y: player.y };
+  }
+  
+  if (player.status === 'bench') {
+    if (player.team === 'home') {
+      const idx = parseInt(player.id.replace('h', ''), 10) - 6; // index 0 to 4
+      const x = 9 + idx * 6;
+      return { x, y: 94 };
+    } else {
+      const idx = parseInt(player.id.replace('a', ''), 10) - 6; // index 0 to 4
+      const x = 71 + idx * 6;
+      return { x, y: 94 };
+    }
+  }
+  
+  // swap coordinates for visual vertical layout (baseline to height, sideline to width) [1]
+  return { x: player.y, y: player.x };
+};
+
+// projects manual drawings dynamically depending on the current viewport layout [1]
+const projectDrawings = (points: { x: number; y: number }[], isVertical: boolean) => {
+  if (!isVertical) {
+    return points.map(p => `${p.x * 5.8},${p.y * 3.8}`).join(' ');
+  } else {
+    return points.map(p => `${p.y * 3.8},${p.x * 5.8}`).join(' ');
+  }
 };
 
 // ==========================================
@@ -204,7 +233,7 @@ export const BasketballBoard: React.FC = () => {
   const [showEvents, setShowEvents] = useState(false);
   const [showDiagramLabels, setShowDiagramLabels] = useState(false);
   
-  // Tactical Board State & Drawing Systems [1]
+  // Tactical Board State & Drawing Systems
   const [activeTool, setActiveTool] = useState<'move' | 'draw' | 'erase'>('move');
   const [drawings, setDrawings] = useState<{ id: string; points: { x: number; y: number }[]; color: string; width: number }[]>([]);
   const [currentDrawingPoints, setCurrentDrawingPoints] = useState<{ x: number; y: number }[]>([]);
@@ -213,7 +242,7 @@ export const BasketballBoard: React.FC = () => {
   const [penSize, setPenSize] = useState<number>(4);
   const [eraserSize, setEraserSize] = useState<number>(8);
   
-  // Multi-Touch Pointer Drag Tracking Refs [1]
+  // Multi-Touch Pointer Drag Tracking Refs
   const activeDragsRef = useRef<Record<number, { 
     playerId: string; 
     startX: number; 
@@ -222,7 +251,7 @@ export const BasketballBoard: React.FC = () => {
     playerStartY: number;
   }>>({});
 
-  // Timer sync helper key to reset only the shot clock active interval
+  // Timer sync helper key
   const [timerResetKey, setTimerResetKey] = useState(0);
 
   // UI States
@@ -239,7 +268,6 @@ export const BasketballBoard: React.FC = () => {
 
   // Tactical court drag states
   const [courtDragId, setCourtDragId] = useState<string | null>(null);
-  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const courtRef = useRef<HTMLDivElement>(null);
 
   const isViewer = mode === 'viewer';
@@ -250,13 +278,38 @@ export const BasketballBoard: React.FC = () => {
     return ('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
+  // Monitor physical mobile screen layout context (Portrait vs Landscape) [1]
+  const [isPortrait, setIsPortrait] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isMobileDevice) {
+      setIsPortrait(false);
+      return;
+    }
+
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, [isMobileDevice]);
+
+  // Evaluates active layout profile (Restricted strictly to mobile setups) [1]
+  const isVerticalView = isMobileDevice && isPortrait;
+
   // ── DERIVED VALUES ──
   const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
   const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
   const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
   const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
 
-  // RESTORED SCORESHEET AND SCORERS DERIVATIONS
   const scoresheetMap = useMemo(() => {
     const home: Record<number, { playerNumber: number; playerName: string }> = {};
     const away: Record<number, { playerNumber: number; playerName: string }> = {};
@@ -291,7 +344,7 @@ export const BasketballBoard: React.FC = () => {
   const bcRef = useRef<BroadcastChannel | null>(null);
   const syncChannelRef = useRef<any>(null);
 
-  // Substitution execution logic (Official scoreboard substitutions)
+  // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
     if (id1 === id2 || isViewer) return;
     const allPlayers = [...homePlayers, ...awayPlayers];
@@ -303,7 +356,6 @@ export const BasketballBoard: React.FC = () => {
 
     const setter = p1.team === 'home' ? setHomePlayers : setAwayPlayers;
     setter(prev => prev.map(p => {
-      // Swapping status and coordinates between active and benched player [1]
       if (p.id === p1.id) return { ...p, status: p2.status, x: p2.x, y: p2.y };
       if (p.id === p2.id) return { ...p, status: p1.status, x: p1.x, y: p1.y };
       return p;
@@ -357,7 +409,6 @@ export const BasketballBoard: React.FC = () => {
           setAwayPlayers(data.awayPlayers);
           setGameTime(data.gameTime);
           
-          // Reset local viewer shot clock interval when a manual 24s/14s override occurs
           if (data.shotClock !== shotClock && (data.shotClock === 24 || data.shotClock === 14)) {
             setTimerResetKey(k => k + 1);
           }
@@ -369,7 +420,6 @@ export const BasketballBoard: React.FC = () => {
           setView(data.view);
           setClockMode(data.clockMode);
           
-          // LIVE DRAWINGS SYNC [1]
           if (data.drawings !== undefined) setDrawings(data.drawings);
           if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
         }
@@ -416,11 +466,10 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints]);
 
-  // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ── [1]
+  // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ──
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
     if (isViewer) return;
     
-    // Prevent default touch/gesture actions (like page scrolling) ONLY when grabbing a token [1]
     e.preventDefault();
     e.stopPropagation();
 
@@ -434,15 +483,17 @@ export const BasketballBoard: React.FC = () => {
     const p = allPlayers.find(pl => pl.id === playerId);
     if (!p) return;
 
-    // Capture pointer directly on the element so dragging is fully stable [1]
     e.currentTarget.setPointerCapture(e.pointerId);
+
+    // Get position in current visual perspective (vertical or horizontal) [1]
+    const projected = getPlayerPos(p, isVerticalView);
 
     activeDragsRef.current[e.pointerId] = {
       playerId,
       startX,
       startY,
-      playerStartX: p.x,
-      playerStartY: p.y
+      playerStartX: projected.x,
+      playerStartY: projected.y
     };
     
     setCourtDragId(playerId);
@@ -462,12 +513,21 @@ export const BasketballBoard: React.FC = () => {
     const deltaX = clientXPercent - dragInfo.startX;
     const deltaY = clientYPercent - dragInfo.startY;
 
-    const newX = clamp(dragInfo.playerStartX + deltaX, 0, 100);
-    const newY = clamp(dragInfo.playerStartY + deltaY, 0, 100);
+    const visualX = clamp(dragInfo.playerStartX + deltaX, 0, 100);
+    const visualY = clamp(dragInfo.playerStartY + deltaY, 0, 100);
+
+    let updatedX = visualX;
+    let updatedY = visualY;
+
+    if (isVerticalView) {
+      // Swapping values back to persistent horizontal profiles [1]
+      updatedX = visualY;
+      updatedY = visualX;
+    }
 
     const updater = (prev: Player[]) => prev.map(p => {
       if (p.id === playerId) {
-        return { ...p, x: newX, y: newY };
+        return { ...p, x: updatedX, y: updatedY };
       }
       return p;
     });
@@ -498,7 +558,7 @@ export const BasketballBoard: React.FC = () => {
     setCourtDragId(null);
   };
 
-  // ── TACTICAL BOARD FREEHAND DRAWING & ERASING HANDLERS ── [1]
+  // ── TACTICAL BOARD FREEHAND DRAWING & ERASING HANDLERS ──
   const handleCourtBgPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isViewer || activeTool === 'move') return;
     e.preventDefault();
@@ -507,17 +567,21 @@ export const BasketballBoard: React.FC = () => {
     const rect = courtRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const visualX = ((e.clientX - rect.left) / rect.width) * 100;
+    const visualY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    // Save drawing point in the base horizontal reference system [1]
+    const savedX = isVerticalView ? visualY : visualX;
+    const savedY = isVerticalView ? visualX : visualY;
 
     e.currentTarget.setPointerCapture(e.pointerId);
 
     if (activeTool === 'draw') {
       setIsDrawing(true);
-      setCurrentDrawingPoints([{ x, y }]);
+      setCurrentDrawingPoints([{ x: savedX, y: savedY }]);
     } else if (activeTool === 'erase') {
       setIsDrawing(true);
-      eraseAtPoint(x, y);
+      eraseAtPoint(savedX, savedY);
     }
   };
 
@@ -527,13 +591,16 @@ export const BasketballBoard: React.FC = () => {
     const rect = courtRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const visualX = ((e.clientX - rect.left) / rect.width) * 100;
+    const visualY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const savedX = isVerticalView ? visualY : visualX;
+    const savedY = isVerticalView ? visualX : visualY;
 
     if (activeTool === 'draw') {
-      setCurrentDrawingPoints(prev => [...prev, { x, y }]);
+      setCurrentDrawingPoints(prev => [...prev, { x: savedX, y: savedY }]);
     } else if (activeTool === 'erase') {
-      eraseAtPoint(x, y);
+      eraseAtPoint(savedX, savedY);
     }
   };
 
@@ -550,7 +617,7 @@ export const BasketballBoard: React.FC = () => {
           id: uid(),
           points: currentDrawingPoints,
           color: strokeColor,
-          width: penSize // Stores the customizable line size [1]
+          width: penSize
         }
       ]);
     }
@@ -563,12 +630,11 @@ export const BasketballBoard: React.FC = () => {
     setDrawings(prev => {
       return prev.filter(drawing => {
         const pts = drawing.points;
-        // Eraser threshold sensitivity is dynamically based on custom eraserSize [1]
         const threshold = eraserSize; 
         for (let i = 0; i < pts.length - 1; i++) {
           const dist = getPointToSegmentDistance(ex, ey, pts[i].x, pts[i].y, pts[i+1].x, pts[i+1].y);
           if (dist < threshold) {
-            return false; // Wipe the entire continuous path [1]
+            return false;
           }
         }
         return true;
@@ -695,7 +761,6 @@ export const BasketballBoard: React.FC = () => {
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
   }, [isViewer]);
 
-  // Instant substitution selection handlers
   const handleSelectCourt = useCallback((id: string) => {
     if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
@@ -708,7 +773,6 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [selectedCourtId, executeSubstitution, isViewer]);
 
-  // Drag-drop substitution handlers
   const handleRosterDragStart = useCallback((e: React.DragEvent, playerId: string) => {
     if (isViewer) return;
     e.dataTransfer.effectAllowed = 'move';
@@ -735,7 +799,7 @@ export const BasketballBoard: React.FC = () => {
   const handleResetShotClock = (seconds: number) => {
     if (isViewer) return;
     setShotClock(seconds);
-    setTimerResetKey(k => k + 1); // Triggers shot-clock only interval to clear and start a fresh 1-second countdown
+    setTimerResetKey(k => k + 1);
   };
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
@@ -1119,10 +1183,10 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
                     <div className="flex flex-col gap-1">
                       {awayScorers.length > 0 ? awayScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2.5 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
-                            <span className="ml-auto font-bold text-sky-300">{p.points} pts</span>
+                            <span className="ml-auto font-bold text-sky-350">{p.points} pts</span>
                           </div>
                       )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
@@ -1189,37 +1253,44 @@ export const BasketballBoard: React.FC = () => {
         )}
 
         {/* ==========================================
-            VIEW 2: FULL TACTICAL COURT (HORIZONTAL CONFIGURATION)
+            VIEW 2: FULL TACTICAL COURT (AUTO-ROTATING VIEW)
            ========================================== */}
         {view === 'court' && (
           <div className="space-y-4">
             
             {/* COMPACT FLOATING SCOREBAR */}
-            <div className="grid grid-cols-3 gap-2 items-center bg-slate-800/80 border border-slate-700/50 rounded-xl p-3 shadow-lg select-none">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-1 sm:gap-2 items-center bg-slate-800/80 border border-slate-700/50 rounded-xl p-2 sm:p-3 shadow-lg select-none">
+              
               {/* Home Team Mini Score */}
-              <div className="flex items-center gap-3 justify-start pl-4">
-                <span className="text-sm font-bold text-amber-400 uppercase tracking-wider">Home</span>
-                <span className="text-3xl font-black text-orange-500">{homeScore}</span>
-                <span className="text-sm md:text-base text-slate-300">(Fouls: <span className="font-bold text-2xl md:text-3xl">{homeFouls}</span>)</span>
+              <div className="flex items-center gap-1.5 sm:gap-3 justify-start pl-1 sm:pl-4">
+                <span className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">Home</span>
+                <span className="text-xl sm:text-3xl font-black text-orange-500">{homeScore}</span>
+                <span className="text-[10px] sm:text-sm text-slate-400 truncate">
+                  (F: <span className="font-extrabold text-sm sm:text-xl text-amber-500">{homeFouls}</span>)
+                </span>
               </div>
               
-              {/* Game Timers */}
-              <div className="text-center flex flex-col items-center">
-                <div className="text-2xl font-mono font-black text-emerald-400 leading-none mb-1">
+              {/* Game Timers (Spans full width on mobile, 1 column on tablet+) */}
+              <div className="col-span-2 sm:col-span-1 order-last sm:order-none text-center flex flex-col items-center border-t border-slate-700/30 pt-1.5 sm:pt-0 sm:border-t-0">
+                <div className="text-xl sm:text-2xl font-mono font-black text-emerald-400 leading-none mb-1">
                   {formatTime(gameTime)}
                 </div>
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs">
                   <span className="text-slate-500">Period: <b className="text-slate-300 font-bold">{period}</b></span>
                   <span className="text-slate-500">|</span>
-                  <span className={`font-mono font-bold ${shotUrgent ? 'text-red-400' : 'text-slate-300'}`}>Shot: {shotClock}s</span>
+                  <span className={`font-mono font-bold ${shotUrgent ? 'text-red-400 animate-pulse' : 'text-slate-300'}`}>
+                    Shot: {shotClock}s
+                  </span>
                 </div>
               </div>
 
               {/* Away Team Mini Score */}
-              <div className="flex items-center gap-3 justify-end pr-4">
-                <span className="text-sm md:text-base text-slate-300">(Fouls: <span className="font-bold text-2xl md:text-3xl">{awayFouls}</span>)</span>
-                <span className="text-3xl font-black text-blue-500">{awayScore}</span>
-                <span className="text-sm font-bold text-sky-400 uppercase tracking-wider">Away</span>
+              <div className="flex items-center gap-1.5 sm:gap-3 justify-end pr-1 sm:pr-4">
+                <span className="text-[10px] sm:text-sm text-slate-400 truncate">
+                  (F: <span className="font-extrabold text-sm sm:text-xl text-sky-400">{awayFouls}</span>)
+                </span>
+                <span className="text-xl sm:text-3xl font-black text-blue-500">{awayScore}</span>
+                <span className="text-xs sm:text-sm font-bold text-sky-400 uppercase tracking-wider">Away</span>
               </div>
             </div>
 
@@ -1243,268 +1314,343 @@ export const BasketballBoard: React.FC = () => {
               </div>
             </div>
 
-            {/* HORIZONTAL DIAGRAM COURT */}
-            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex justify-center">
+            {/* DIAGRAM COURT AND CONTROLS CARD */}
+            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex flex-col items-center gap-4">
+              
+              {/* TOOLBAR CONTROL PANEL (OUTSIDE THE COURT WORKSPACE) [1] */}
+              {!isViewer && (
+                <div className="flex flex-row flex-wrap items-center justify-center gap-2 p-1.5 bg-slate-900/95 border border-slate-700/50 rounded-xl shadow-lg select-none">
+                  <button
+                    onClick={() => setActiveTool('move')}
+                    title="Move Players"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Move size={15} /> Move
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTool('draw')}
+                    title="Draw Lines"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Pencil size={15} /> Draw
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTool('erase')}
+                    title="Eraser"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Eraser size={15} /> Eraser
+                  </button>
+
+                  <div className="border-l h-6 mx-1 border-slate-700/50" />
+
+                  <button
+                    onClick={() => {
+                      setDrawings([]);
+                      setCurrentDrawingPoints([]);
+                    }}
+                    title="Clear All Drawings"
+                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+
+                  {activeTool === 'draw' && (
+                    <>
+                      <div className="border-l h-6 mx-1 border-slate-700/50" />
+                      <div className="flex items-center gap-1.5 flex-row px-1">
+                        {[
+                          ['#ff4444', 'bg-red-500'],
+                          ['#3b82f6', 'bg-blue-500'],
+                          ['#ffffff', 'bg-white border border-slate-600']
+                        ].map(([colorCode, bgClass]) => (
+                          <button
+                            key={colorCode}
+                            onClick={() => setStrokeColor(colorCode)}
+                            className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
+                              strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* DIAGRAM PANEL */}
               <div className="w-full relative">
                 <div ref={courtRef}
                   onPointerDown={handleCourtBgPointerDown}
                   onPointerMove={handleCourtBgPointerMove}
                   onPointerUp={handleCourtBgPointerUp}
                   onPointerCancel={handleCourtBgPointerUp}
-                  className={`min-w-[560px] md:min-w-0 relative aspect-[58/38] w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
-                    courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'
-                  }`}
+                  className={`relative w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
+                    isVerticalView 
+                      ? 'aspect-[38/58] max-w-[420px] mx-auto' 
+                      : 'min-w-[560px] md:min-w-0 aspect-[58/38]'
+                  } ${courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'}`}
                   style={{ backgroundColor: '#fdd2ab' }}
                 >
                   
-                  {/* 1. RE-ALIGNED SVG */}
-                  <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
-                    {/* Peach court boundary background */}
-                    <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
-                    
-                    {/* Bench Area Bottom Strip background */}
-                    <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
-                    
-                    {/* Key Areas (Bright Orange - Inset to Midpoint Y = 170) */}
-                    <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
-                    <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
+                  {isVerticalView ? (
+                    // ==================================================
+                    // 1. VERTICAL VIEW SVG (ViewBox: 380 x 580) [1]
+                    // ==================================================
+                    <svg viewBox="0 0 380 580" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                      <rect x="0" y="0" width="380" height="510" fill="#fdd2ab" />
+                      <rect x="0" y="510" width="380" height="70" fill="#dfd0c0" />
+                      <rect x="140" y="10" width="100" height="100" fill="#f2913f" />
+                      <rect x="140" y="410" width="100" height="100" fill="#f2913f" />
+                      
+                      {/* Court Boundary Lines (Thicker stroke) */}
+                      <rect x="50" y="10" width="280" height="500" fill="none" stroke="white" strokeWidth="3.5" />
+                      <line x1="50" y1="260" x2="330" y2="260" stroke="white" strokeWidth="3.5" />
+                      
+                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                      <circle cx="190" cy="260" r="28" fill="none" stroke="white" strokeWidth="3" />
+                      <circle cx="190" cy="260" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
 
-                    {/* Outer Court Boundary Lines (Inset Sidelines at Y=30 and Y=310, Baselines at X=40 and X=540) */}
-                    <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="2.5" />
-                    
-                    {/* Half-Court line (Vertical midpoint at X = 290) */}
-                    <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="2.5" />
-                    
-                    {/* Center Restraining Circles (Aligned on Y = 170) */}
-                    <circle cx="290" cy="170" r="40" fill="none" stroke="white" strokeWidth="2" />
-                    <circle cx="290" cy="170" r="10" fill="none" stroke="white" strokeWidth="1.2" strokeDasharray="2.5,2.5" />
+                      {/* TOP BASKET ZONE (Thicker stroke, wider corner three-point area) [1] */}
+                      <line x1="140" y1="110" x2="240" y2="110" stroke="white" strokeWidth="3.5" />
+                      <path d="M 170,29 A 20,20 0 0,0 210,29" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 140,110 A 50,50 0 0,0 240,110" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 140,110 A 50,50 0 0,1 240,110" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 75,10 L 75,80 A 115,115 0 0,0 305,80 L 305,10" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="160" y1="22" x2="220" y2="22" stroke="white" strokeWidth="4" />
+                      <line x1="190" y1="10" x2="190" y2="22" stroke="white" strokeWidth="2" />
+                      <circle cx="190" cy="29" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                    {/* LEFT COURT HALF LINES (Aligned on Y = 170) */}
-                    {/* Left Free throw line */}
-                    <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="2.5" />
-                    {/* Left Restricted Area Arc */}
-                    <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                    {/* Left Free-Throw Circle (Outer Solid half) */}
-                    <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="2" />
-                    {/* Left Free-Throw Circle (Dashed inner half inside paint) */}
-                    <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
-                    {/* Left 3-Point Line */}
-                    <path d="M 40,45 L 110,45 A 125,125 0 0,1 110,295 L 40,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Left Backboard, Rim, and Support */}
-                    <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="3" />
-                    <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="1.5" />
-                    <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
+                      {/* BOTTOM BASKET ZONE (Thicker lines, wider corner three-point area) [1] */}
+                      <line x1="140" y1="410" x2="240" y2="410" stroke="white" strokeWidth="2.5" />
+                      <path d="M 170,491 A 20,20 0 0,1 210,491" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                      <path d="M 140,410 A 50,50 0 0,1 240,410" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 140,410 A 50,50 0 0,0 240,410" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 75,510 L 75,440 A 115,115 0 0,1 305,440 L 305,510" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="160" y1="498" x2="220" y2="498" stroke="white" strokeWidth="4" />
+                      <line x1="190" y1="510" x2="190" y2="498" stroke="white" strokeWidth="2" />
+                      <circle cx="190" cy="491" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                    {/* RIGHT COURT HALF LINES (Aligned on Y = 170) */}
-                    {/* Right Free throw line */}
-                    <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="2.5" />
-                    {/* Right Restricted Area Arc */}
-                    <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                    {/* Right Free-Throw Circle (Outer Solid half) */}
-                    <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="2" />
-                    {/* Right Free-Throw Circle (Dashed inner half inside paint) */}
-                    <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.5,2.5" />
-                    {/* Right 3-Point Line */}
-                    <path d="M 540,45 L 470,45 A 125,125 0 0,0 470,295 L 540,295" fill="none" stroke="white" strokeWidth="2.2" />
-                    {/* Right Backboard, Rim, and Support */}
-                    <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="3" />
-                    <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="1.5" />
-                    <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="2.5" />
+                      {/* Hashmarks */}
+                      <line x1="50" y1="170" x2="60" y2="170" stroke="white" strokeWidth="2" />
+                      <line x1="50" y1="350" x2="60" y2="350" stroke="white" strokeWidth="2" />
+                      <line x1="320" y1="170" x2="330" y2="170" stroke="white" strokeWidth="2" />
+                      <line x1="320" y1="350" x2="330" y2="350" stroke="white" strokeWidth="2" />
 
-                    {/* Sideline Hashmarks */}
-                    <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="1.8" />
-                    <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="1.8" />
-                    <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="1.8" />
-                    <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="1.8" />
+                      {/* Bench Graphic Outlines */}
+                      <rect x="20" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="150" y="525" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="250" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
 
-                    {/* BOTTOM SIDE BENCH ZONE GRAPHICS */}
-                    <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                    {/* Substitution Box */}
-                    <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                    {/* Right coaching/bench area box */}
-                    <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <text x="75" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+                      <text x="190" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Sub Box</text>
+                      <text x="305" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
 
-                    {/* Bench labels */}
-                    <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
-                      Coaching box and Team bench area
-                    </text>
-                    <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
-                      Substitution box
-                    </text>
-                    <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">
-                      Coaching box and Team bench area
-                    </text>
+                      {/* Render drawings projected vertically */}
+                      {drawings.map(drawing => (
+                        <polyline
+                          key={drawing.id}
+                          points={projectDrawings(drawing.points, true)}
+                          fill="none"
+                          stroke={drawing.color}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      ))}
 
-                    {/* RENDERING COMPLETE FREEHAND DRAWINGS [1] */}
-                    {drawings.map(drawing => (
-                      <polyline
-                        key={drawing.id}
-                        points={drawing.points.map(p => `${p.x * 5.8},${p.y * 3.8}`).join(' ')}
-                        fill="none"
-                        stroke={drawing.color}
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        opacity="0.9"
-                      />
-                    ))}
+                      {currentDrawingPoints.length > 1 && (
+                        <polyline
+                          points={projectDrawings(currentDrawingPoints, true)}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      )}
 
-                    {/* RENDERING ACTIVE DRAG DRAWING IN PROGRESS [1] */}
-                    {currentDrawingPoints.length > 1 && (
-                      <polyline
-                        points={currentDrawingPoints.map(p => `${p.x * 5.8},${p.y * 3.8}`).join(' ')}
-                        fill="none"
-                        stroke={strokeColor}
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        opacity="0.9"
-                      />
-                    )}
+                      {/* Vertical Labels */}
+                      {showDiagramLabels && (
+                        <g className="transition-opacity duration-300 opacity-95">
+                          <style>{`
+                            .diag-lbl { font-family: sans-serif; font-size: 9px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                          `}</style>
+                          <text x="65" y="25" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="315" y="25" className="diag-lbl" textAnchor="end">Corner</text>
+                          <text x="65" y="495" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="315" y="495" className="diag-lbl" textAnchor="end">Corner</text>
+                          
+                          <text x="140" y="125" className="diag-lbl" textAnchor="end">Elbow</text>
+                          <text x="240" y="125" className="diag-lbl" textAnchor="start">Elbow</text>
+                          <text x="140" y="395" className="diag-lbl" textAnchor="end">Elbow</text>
+                          <text x="240" y="395" className="diag-lbl" textAnchor="start">Elbow</text>
+                          
+                          <text x="190" y="70" className="diag-lbl" textAnchor="middle">Painted Area</text>
+                          <text x="190" y="455" className="diag-lbl" textAnchor="middle">Painted Area</text>
 
-                    {/* DIAGRAM LABELS */}
-                    {showDiagramLabels && (
-                      <g className="transition-opacity duration-300 opacity-95">
-                        <style>{`
-                          .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
-                        `}</style>
-                        
-                        {/* Key Locations */}
-                        <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
-                        <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
-                        <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
-                        
-                        <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
-                        <text x="480" y="125" className="diag-lbl" textAnchor="start">Low Post / Block</text>
-                        
-                        <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                        <text x="507" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                        
-                        <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
-                        <text x="435" y="115" className="diag-lbl" textAnchor="start">High Post / Elbow</text>
-                        
-                        <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                        <text x="375" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                        
-                        <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
-                        <text x="400" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+                          <text x="190" y="170" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          <text x="190" y="350" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          
+                          <text x="190" y="270" className="diag-lbl" textAnchor="middle">Center Circle</text>
+                          <text x="190" y="250" className="diag-lbl" textAnchor="middle">Half-Court Line</text>
+                          <text x="45" y="260" className="diag-lbl" textAnchor="middle" transform="rotate(-90 45 260)">Sideline</text>
+                          <text x="190" y="505" className="diag-lbl" textAnchor="middle">Baseline</text>
+                        </g>
+                      )}
+                    </svg>
+                  ) : (
+                    // ==================================================
+                    // 2. HORIZONTAL VIEW SVG (ViewBox: 580 x 380) [1]
+                    // ==================================================
+                    <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                      <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
+                      <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
+                      <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
+                      <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
 
-                        {/* Mid-court Descriptors */}
-                        <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
-                        <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
-                        <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
-                        <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
+                      {/* Outer Court Lines (Thicker stroke) */}
+                      <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="3.5" />
+                      <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="3.5" />
+                      
+                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                      <circle cx="290" cy="170" r="28" fill="none" stroke="white" strokeWidth="3" />
+                      <circle cx="290" cy="170" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
 
-                        {/* Paint details inside left key */}
-                        <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
+                      {/* Basket area lines (Wider corner three-point area) [1] */}
+                      <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="3.5" />
+                      <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 40,60 L 110,60 A 110,110 0 0,1 110,280 L 40,280" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="4" />
+                      <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="2" />
+                      <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                        {/* Three Point Line Marker */}
-                        <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
-                      </g>
-                    )}
-                  </svg>
+                      {/* Right-hand side Basket area lines (Wider corner three-point area) [1] */}
+                      <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="3.5" />
+                      <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 540,60 L 470,60 A 110,110 0 0,0 470,280 L 540,280" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="4" />
+                      <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="2" />
+                      <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
 
-                  {/* 2. DRAGGABLE COURT PLAYER TOKENS */}
+                      <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="2" />
+                      <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="2" />
+                      <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="2" />
+                      <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="2" />
+
+                      <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+
+                      <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+                      <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substitution box</text>
+                      <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+
+                      {drawings.map(drawing => (
+                        <polyline
+                          key={drawing.id}
+                          points={projectDrawings(drawing.points, false)}
+                          fill="none"
+                          stroke={drawing.color}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      ))}
+
+                      {currentDrawingPoints.length > 1 && (
+                        <polyline
+                          points={projectDrawings(currentDrawingPoints, false)}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      )}
+
+                      {showDiagramLabels && (
+                        <g className="transition-opacity duration-300 opacity-95">
+                          <style>{`
+                            .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                          `}</style>
+                          <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
+                          
+                          <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
+                          <text x="480" y="125" className="diag-lbl" textAnchor="start">Low Post / Block</text>
+                          
+                          <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                          <text x="507" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                          
+                          <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
+                          <text x="435" y="115" className="diag-lbl" textAnchor="start">High Post / Elbow</text>
+                          
+                          <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          <text x="375" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          
+                          <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+                          <text x="400" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+
+                          <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
+                          <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
+                          <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
+                          <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
+
+                          <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
+                          <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
+                        </g>
+                      )}
+                    </svg>
+                  )}
+
+                  {/* ACTIVE PRESENTATION PLAYER TOKENS */}
                   {[
                     ...homePlayers,
                     ...awayPlayers
-                  ].map(player => (
-                    <div key={player.id}
-                      onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                      onPointerMove={e => handleCourtPointerMove(e, player.id)}
-                      onPointerUp={e => handleCourtPointerUp(e, player.id)}
-                      onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
-                      style={{ 
-                        left: `${player.x}%`, 
-                        top: `${player.y}%`, 
-                        transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
-                        pointerEvents: activeTool === 'move' ? 'auto' : 'none' // Disables tokens pointer capture in Draw Mode [1]
-                      }}>
-                      <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
-                        player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                      } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
-                        {player.number}
+                  ].map(player => {
+                    const pos = getPlayerPos(player, isVerticalView);
+                    return (
+                      <div key={player.id}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
+                        onPointerMove={e => handleCourtPointerMove(e, player.id)}
+                        onPointerUp={e => handleCourtPointerUp(e, player.id)}
+                        onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
+                        style={{ 
+                          left: `${pos.x}%`, 
+                          top: `${pos.y}%`, 
+                          transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
+                          pointerEvents: activeTool === 'move' ? 'auto' : 'none'
+                        }}>
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
+                          player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                        } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
+                          {player.number}
+                        </div>
+                        <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
+                          {player.name}
+                        </span>
                       </div>
-                      <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
-                        {player.name}
-                      </span>
-                    </div>
-                  ))}
-
-                  {/* 3. DRAWING SIDEBAR OVERLAY (RIGHT SIDE OF THE COURT) */}
-                  {!isViewer && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 p-1.5 bg-slate-900/90 border border-slate-700/50 rounded-xl shadow-2xl z-20 select-none">
-                      {/* Move Tool */}
-                      <button
-                        onClick={() => setActiveTool('move')}
-                        title="Move Players"
-                        className={`p-2 rounded-lg transition-colors ${
-                          activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Move size={16} />
-                      </button>
-
-                      {/* Draw Tool */}
-                      <button
-                        onClick={() => setActiveTool('draw')}
-                        title="Draw Lines"
-                        className={`p-2 rounded-lg transition-colors ${
-                          activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Pencil size={16} />
-                      </button>
-
-                      {/* Erase Tool */}
-                      <button
-                        onClick={() => setActiveTool('erase')}
-                        title="Eraser"
-                        className={`p-2 rounded-lg transition-colors ${
-                          activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Eraser size={16} />
-                      </button>
-
-                      <div className="border-t border-slate-700/50 my-1" />
-
-                      {/* Clear All Drawings */}
-                      <button
-                        onClick={() => {
-                          setDrawings([]);
-                          setCurrentDrawingPoints([]);
-                        }}
-                        title="Clear All Drawings"
-                        className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-
-                      {/* Color Palette (only visible when in Draw mode) */}
-                      {activeTool === 'draw' && (
-                        <>
-                          <div className="border-t border-slate-700/50 my-1" />
-                          <div className="flex flex-col gap-1.5 items-center py-1">
-                            {[
-                              ['#ff4444', 'bg-red-500'],
-                              ['#3b82f6', 'bg-blue-500'],
-                              ['#ffffff', 'bg-white border border-slate-600']
-                            ].map(([colorCode, bgClass]) => (
-                              <button
-                                key={colorCode}
-                                onClick={() => setStrokeColor(colorCode)}
-                                className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
-                                  strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
+                    );
+                  })}
 
                 </div>
               </div>
@@ -1578,7 +1724,6 @@ const RosterPanel: React.FC<{
       </div>
 
       <div className="p-3 space-y-3">
-        {/* Court */}
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
@@ -1643,7 +1788,6 @@ const RosterPanel: React.FC<{
           </div>
         </div>
 
-        {/* Bench */}
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
@@ -1673,7 +1817,6 @@ const RosterPanel: React.FC<{
           </div>
         </div>
             
-        {/* Player stats */}
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
           <div className="flex items-center gap-4 text-xs">
