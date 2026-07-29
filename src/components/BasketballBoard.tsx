@@ -850,6 +850,36 @@ export const BasketballBoard: React.FC = () => {
     setDraggedId(null);
   }, [draggedId, executeSubstitution, isViewer]);
 
+  const handleCourtSectionDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (!draggedId || isViewer) return;
+    const all = [...homePlayers, ...awayPlayers];
+    const draggedPlayer = all.find(p => p.id === draggedId);
+    if (!draggedPlayer) return;
+    if (draggedPlayer.status === 'court') return;
+    const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
+    const firstCourt = teamPlayers.find(p => p.status === 'court');
+    if (!firstCourt) return;
+    executeSubstitution(draggedId, firstCourt.id);
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, homePlayers, awayPlayers, executeSubstitution, isViewer]);
+
+  const handleBenchSectionDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (!draggedId || isViewer) return;
+    const all = [...homePlayers, ...awayPlayers];
+    const draggedPlayer = all.find(p => p.id === draggedId);
+    if (!draggedPlayer) return;
+    if (draggedPlayer.status === 'bench') return;
+    const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
+    const firstBench = teamPlayers.find(p => p.status === 'bench');
+    if (!firstBench) return;
+    executeSubstitution(draggedId, firstBench.id);
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, homePlayers, awayPlayers, executeSubstitution, isViewer]);
+
   const handleSetTime = useCallback(() => {
     if (isViewer) return;
     const m = parseInt(inputMins, 10);
@@ -1223,7 +1253,9 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={clearHome} />
+                onClear={clearHome}
+                onCourtDrop={handleCourtSectionDrop}
+                onBenchDrop={handleBenchSectionDrop} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1234,7 +1266,9 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={clearAway} />
+                onClear={clearAway}
+                onCourtDrop={handleCourtSectionDrop}
+                onBenchDrop={handleBenchSectionDrop} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1896,12 +1930,16 @@ const RosterPanel: React.FC<{
   onBenchClick: (id: string) => void;
   isViewer?: boolean;
   onClear?: () => void;
+  onCourtDrop?: (e: React.DragEvent) => void;
+  onBenchDrop?: (e: React.DragEvent) => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
   selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
-  onClear
+  onClear,
+  onCourtDrop,
+  onBenchDrop
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -1943,7 +1981,11 @@ const RosterPanel: React.FC<{
       <div className="p-3 space-y-3">
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+          <div
+            onDragOver={(e) => { e.preventDefault(); }}
+            onDrop={(e) => { if (onCourtDrop) onCourtDrop(e); }}
+            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
+          >
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
@@ -1951,8 +1993,8 @@ const RosterPanel: React.FC<{
                   draggable={!isViewer}
                   onContextMenu={e => e.preventDefault()}
                   onDragStart={e => onDragStart(e, player.id)}
-                  onDrop={e => onDrop(e, player.id)}
-                  onDragOver={e => onDragOver(e, player.id)}
+                  onDragOver={e => e.stopPropagation()}
+                  onDrop={(e) => { e.stopPropagation(); onDrop(e, player.id); }}
                   onDragLeave={onDragLeave}
                   onClick={() => onSelectCourt(player.id)}
                   className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
@@ -2007,20 +2049,26 @@ const RosterPanel: React.FC<{
 
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+          <div
+            onDragOver={(e) => { e.preventDefault(); }}
+            onDrop={(e) => { if (onBenchDrop) onBenchDrop(e); }}
+            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
+          >
             {benchPlayers.map(player => (
               <div key={player.id}
                 draggable={!isViewer}
                 onContextMenu={e => e.preventDefault()}
                 onDragStart={e => onDragStart(e, player.id)}
-                onDrop={e => onDrop(e, player.id)}
-                onDragOver={e => onDragOver(e, player.id)}
+                onDragOver={e => e.stopPropagation()}
+                onDrop={(e) => { e.stopPropagation(); onDrop(e, player.id); }}
                 onDragLeave={onDragLeave}
                 onClick={() => onBenchClick(player.id)}
+                onDoubleClick={() => onBenchClick(player.id)}
                 className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
                   isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}
-                `}>
+                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}`}
+                title="Double-click or drag onto court to substitute"
+              >
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
                   isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
                 }`}>
