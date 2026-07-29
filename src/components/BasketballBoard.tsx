@@ -808,6 +808,21 @@ export const BasketballBoard: React.FC = () => {
     setAwayPlayers([]);
   }, [isViewer]);
 
+  const clearPool = useCallback(() => {
+    if (isViewer) return;
+    setPoolPlayers([]);
+  }, [isViewer]);
+
+  const clearHome = useCallback(() => {
+    if (isViewer) return;
+    setHomePlayers([]);
+  }, [isViewer]);
+
+  const clearAway = useCallback(() => {
+    if (isViewer) return;
+    setAwayPlayers([]);
+  }, [isViewer]);
+
   const handleSelectCourt = useCallback((id: string) => {
     if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
@@ -1139,7 +1154,14 @@ export const BasketballBoard: React.FC = () => {
                   <List size={16} className="text-amber-400" />
                   <span className="text-sm font-bold text-amber-400">Player Pool</span>
                 </div>
-                <div className="text-[10px] text-slate-500">Drag roster players here to unassign them</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-[10px] text-slate-500">Drag roster players here to unassign them</div>
+                  {!isViewer && (
+                    <button onClick={clearPool} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
+                      <Trash2 size={10} /> Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -1200,7 +1222,8 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} isViewer={isViewer} />
+                onBenchClick={handleBenchClick} isViewer={isViewer}
+                onClear={clearHome} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1210,7 +1233,8 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} isViewer={isViewer} />
+                onBenchClick={handleBenchClick} isViewer={isViewer}
+                onClear={clearAway} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1871,11 +1895,13 @@ const RosterPanel: React.FC<{
   onSelectCourt: (id: string) => void;
   onBenchClick: (id: string) => void;
   isViewer?: boolean;
+  onClear?: () => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
-  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false
+  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
+  onClear
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -1906,6 +1932,11 @@ const RosterPanel: React.FC<{
           <span>Bench: {benchPlayers.length}</span>
           <span className="text-slate-700">|</span>
           <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click/drag to sub</span>
+          {!isViewer && onClear && (
+            <button onClick={onClear} className="ml-1 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
+              <Trash2 size={10} /> Clear
+            </button>
+          )}
         </div>
       </div>
 
