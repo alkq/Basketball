@@ -218,11 +218,16 @@ export const BasketballBoard: React.FC = () => {
 
   // UI View States
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
-  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); 
+  const [view, setView] = useState<'scoreboard' | 'court'>(initialView);
 
   // Game States
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
+
+  // Player Pool State
+  const [poolPlayers, setPoolPlayers] = useState<Player[]>([]);
+  const [poolInputName, setPoolInputName] = useState('');
+  const [poolInputNumber, setPoolInputNumber] = useState('');
   const [gameTime, setGameTime] = useState(600);
   const [shotClock, setShotClock] = useState(24);
   const [isRunning, setIsRunning] = useState(false);
@@ -761,6 +766,48 @@ export const BasketballBoard: React.FC = () => {
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
   }, [isViewer]);
 
+  const addPoolPlayer = useCallback(() => {
+    if (isViewer) return;
+    const name = poolInputName.trim();
+    if (!name) return;
+    const rawNum = poolInputNumber.trim();
+    const number = rawNum ? parseInt(rawNum, 10) : (poolPlayers.length + 1);
+    const id = `pool-${uid()}`;
+    setPoolPlayers(prev => [...prev, { id, name: name || `Player ${prev.length + 1}`, number: isNaN(number) ? prev.length + 1 : number, points: 0, fouls: 0, status: 'bench', team: 'home', x: 0, y: 0 }]);
+    setPoolInputName('');
+    setPoolInputNumber('');
+  }, [poolInputName, poolInputNumber, poolPlayers, isViewer]);
+
+  const removePoolPlayer = useCallback((id: string) => {
+    if (isViewer) return;
+    setPoolPlayers(prev => prev.filter(p => p.id !== id));
+  }, [isViewer]);
+
+  const movePoolToTeam = useCallback((poolId: string, team: 'home' | 'away') => {
+    if (isViewer) return;
+    const p = poolPlayers.find(x => x.id === poolId);
+    if (!p) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => [...prev, { ...p, id: uid(), team, status: 'bench', x: team === 'home' ? 9.5 + prev.filter(x => x.team === team).length * 1 : 67 + prev.filter(x => x.team === team).length * 1, y: 91 }]);
+    setPoolPlayers(pr => pr.filter(x => x.id !== poolId));
+  }, [poolPlayers, isViewer]);
+
+  const moveRosterToPool = useCallback((playerId: string) => {
+    if (isViewer) return;
+    const all = [...homePlayers, ...awayPlayers];
+    const p = all.find(x => x.id === playerId);
+    if (!p) return;
+    const setter = p.team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => prev.filter(x => x.id !== playerId));
+    setPoolPlayers(prev => [...prev, { ...p, id: `pool-${uid()}`, status: 'bench', team: 'home', x: 0, y: 0 }]);
+  }, [homePlayers, awayPlayers, isViewer]);
+
+  const clearRosters = useCallback(() => {
+    if (isViewer) return;
+    setHomePlayers([]);
+    setAwayPlayers([]);
+  }, [isViewer]);
+
   const handleSelectCourt = useCallback((id: string) => {
     if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
@@ -776,6 +823,7 @@ export const BasketballBoard: React.FC = () => {
   const handleRosterDragStart = useCallback((e: React.DragEvent, playerId: string) => {
     if (isViewer) return;
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/player-id', playerId);
     setDraggedId(playerId);
   }, [isViewer]);
 
@@ -934,6 +982,10 @@ export const BasketballBoard: React.FC = () => {
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                         <RotateCcw size={13} /> Reset
                       </button>
+                      <button onClick={clearRosters}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/70 hover:bg-red-800 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                        <Trash2 size={13} /> Clear Rosters
+                      </button>
                       <button onClick={() => setView('court')}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                         <Move size={13} /> Open Tactical Page
@@ -1077,6 +1129,63 @@ export const BasketballBoard: React.FC = () => {
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Player Pool */}
+            <div className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <List size={16} className="text-amber-400" />
+                  <span className="text-sm font-bold text-amber-400">Player Pool</span>
+                </div>
+                <div className="text-[10px] text-slate-500">Drag roster players here to unassign them</div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <input type="text" value={poolInputName} onChange={e => setPoolInputName(e.target.value)} placeholder="Player name"
+                  className="px-3 py-2 bg-slate-700/80 border border-slate-600 rounded-lg text-white text-xs focus:outline-none focus:border-amber-500 w-40" />
+                <input type="number" value={poolInputNumber} onChange={e => setPoolInputNumber(e.target.value)} placeholder="#"
+                  className="px-2 py-2 w-16 text-center bg-slate-700/80 border border-slate-600 rounded-lg text-white text-xs focus:outline-none focus:border-amber-500" />
+                <button onClick={addPoolPlayer}
+                  className="px-3 py-2 bg-amber-700/90 hover:bg-amber-600 text-white text-xs font-bold rounded-lg shadow transition-all active:scale-95">
+                  + Add
+                </button>
+              </div>
+
+              <div onDragOver={(e) => { e.preventDefault(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData('text/player-id');
+                  if (id) moveRosterToPool(id);
+                }}
+                className="min-h-[64px] rounded-xl border-2 border-dashed border-slate-700/70 p-2 flex flex-wrap gap-2">
+                {poolPlayers.length === 0 && (
+                  <span className="text-[11px] text-slate-600 italic px-2 py-1">Drop roster players here to remove them from Home/Away.</span>
+                )}
+                {poolPlayers.map(p => (
+                  <div key={p.id} draggable
+                    onDragStart={(e) => { e.dataTransfer.setData('text/player-id', p.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    className="flex items-center gap-2 px-2.5 py-2 bg-slate-700/90 border border-slate-600 rounded-lg cursor-grab active:cursor-grabbing">
+                    <div className="w-6 h-6 rounded-full bg-slate-600 text-white font-black text-[10px] flex items-center justify-center">
+                      {p.number}
+                    </div>
+                    <span className="text-[11px] text-slate-200 truncate max-w-[80px]">{p.name}</span>
+                    <button onClick={() => removePoolPlayer(p.id)} className="text-slate-400 hover:text-red-400 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                    <div className="flex gap-1 ml-1">
+                      <button onClick={() => movePoolToTeam(p.id, 'home')}
+                        className="px-2 py-1 rounded bg-orange-800/80 hover:bg-orange-700 text-orange-200 text-[10px] font-bold border border-orange-600/40">
+                        → Home
+                      </button>
+                      <button onClick={() => movePoolToTeam(p.id, 'away')}
+                        className="px-2 py-1 rounded bg-blue-800/80 hover:bg-blue-700 text-sky-200 text-[10px] font-bold border border-blue-600/40">
+                        → Away
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
