@@ -1082,24 +1082,24 @@ export const BasketballBoard: React.FC = () => {
                     <span className="text-sm sm:text-base">Fouls:</span>
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${trainingHomeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{trainingHomeFouls}</span>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-start gap-2">
-                    <button onClick={() => setTrainingHomeScore(Math.max(0, trainingHomeScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
-                    <button onClick={() => { setTrainingHomeScore(s => s + 1); setTrainingUndo(prev => [...prev, { team: 'home', type: 'score', delta: 1 }]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
-                    <button onClick={() => { setTrainingHomeScore(s => s + 2); setTrainingUndo(prev => [...prev, { team: 'home', type: 'score', delta: 2 }]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
-                    <button onClick={() => { setTrainingHomeScore(s => s + 3); setTrainingUndo(prev => [...prev, { team: 'home', type: 'score', delta: 3 }]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
-                    <button onClick={() => { setTrainingHomeFouls(s => s + 1); setTrainingUndo(prev => [...prev, { team: 'home', type: 'foul', delta: 1 }]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
-                    <button onClick={() => {
-                      setTrainingUndo(prev => {
-                        const next = [...prev];
-                        const last = next[next.length - 1];
-                        if (!last || last.team !== 'home') return next;
-                        next.pop();
-                        if (last.type === 'score') setTrainingHomeScore(s => Math.max(0, s - last.delta));
-                        if (last.type === 'foul') setTrainingHomeFouls(s => Math.max(0, s - last.delta));
-                        return next;
-                      });
-                    }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
-                  </div>
+                  {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
+                      <button onClick={() => setTrainingHomeScore(Math.max(0, trainingHomeScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                      <button onClick={() => { setTrainingHomeScore(s => s + 1); setTrainingUndo(prev => [...prev, {team:'home',type:'score',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                      <button onClick={() => { setTrainingHomeScore(s => s + 2); setTrainingUndo(prev => [...prev, {team:'home',type:'score',delta:2}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                      <button onClick={() => { setTrainingHomeScore(s => s + 3); setTrainingUndo(prev => [...prev, {team:'home',type:'score',delta:3}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                      <button onClick={() => { setTrainingHomeFouls(s => s + 1); setTrainingUndo(prev => [...prev, {team:'home',type:'foul',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                      <button onClick={() => {
+                        setTrainingUndo(prev => {
+                          const next = [...prev];
+                          const last = next[next.length - 1];
+                          if (!last || last.team !== 'home') return next;
+                          next.pop();
+                          if (last.type === 'score') setTrainingHomeScore(s => Math.max(0, s - last.delta));
+                          if (last.type === 'foul') setTrainingHomeFouls(s => Math.max(0, s - last.delta));
+                          return next;
+                        });
+                      }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
+                    </div>}
                 </div>
 
                 {/* Clock Controllers */}
@@ -1186,24 +1186,24 @@ export const BasketballBoard: React.FC = () => {
                     <span className="text-base md:text-lg">Fouls:</span>
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${trainingAwayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{trainingAwayFouls}</span>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-start gap-2">
-                    <button onClick={() => setTrainingAwayScore(Math.max(0, trainingAwayScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
-                    <button onClick={() => { setTrainingAwayScore(s => s + 1); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
-                    <button onClick={() => { setTrainingAwayScore(s => s + 2); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:2}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
-                    <button onClick={() => { setTrainingAwayScore(s => s + 3); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:3}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
-                    <button onClick={() => { setTrainingAwayFouls(s => s + 1); setTrainingUndo(u => [...u, {team:'away',type:'foul',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
-                    <button onClick={() => {
-                      setTrainingUndo(u => {
-                        const next = [...u];
-                        const last = next[next.length - 1];
-                        if (!last || last.team !== 'away') return next;
-                        next.pop();
-                        if (last.type === 'score') setTrainingAwayScore(s => Math.max(0, s - last.delta));
-                        if (last.type === 'foul') setTrainingAwayFouls(s => Math.max(0, s - last.delta));
-                        return next;
-                      });
-                    }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
-                  </div>
+                  {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
+                      <button onClick={() => setTrainingAwayScore(Math.max(0, trainingAwayScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                      <button onClick={() => { setTrainingAwayScore(s => s + 1); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                      <button onClick={() => { setTrainingAwayScore(s => s + 2); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:2}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                      <button onClick={() => { setTrainingAwayScore(s => s + 3); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:3}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                      <button onClick={() => { setTrainingAwayFouls(s => s + 1); setTrainingUndo(u => [...u, {team:'away',type:'foul',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                      <button onClick={() => {
+                        setTrainingUndo(u => {
+                          const next = [...u];
+                          const last = next[next.length - 1];
+                          if (!last || last.team !== 'away') return next;
+                          next.pop();
+                          if (last.type === 'score') setTrainingAwayScore(s => Math.max(0, s - last.delta));
+                          if (last.type === 'foul') setTrainingAwayFouls(s => Math.max(0, s - last.delta));
+                          return next;
+                        });
+                      }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
+                    </div>}
                 </div>
               </div>
             </div>
