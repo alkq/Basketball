@@ -820,13 +820,17 @@ export const BasketballBoard: React.FC = () => {
   const handleCourtGridDrop = useCallback((e: React.DragEvent, team: 'home' | 'away') => {
     e.preventDefault();
     if (!draggedId || isViewer) return;
-    const setters = { home: setHomePlayers, away: setAwayPlayers };
-    const setter = setters[team];
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
     setter(prev => {
       const court = prev.filter(p => p.status === 'court');
       const dragged = prev.find(p => p.id === draggedId);
       if (court.length >= 5 || !dragged || dragged.status !== 'bench') return prev;
-      return prev.map(p => p.id === draggedId ? { ...p, status: 'court' as const } : p);
+      const otherBench = prev.filter(p => p.status === 'bench' && p.id !== draggedId);
+      return [
+        ...court,
+        { ...dragged, status: 'court' as const },
+        ...otherBench
+      ];
     });
     setDraggedId(null);
     setDropTargetId(null);
@@ -1893,7 +1897,7 @@ const RosterPanel: React.FC<{
                   draggable={!isViewer}
                   onContextMenu={e => e.preventDefault()}
                   onDragStart={e => onDragStart(e, player.id)}
-                  onDrop={e => onDrop(e, player.id)}
+                  onDrop={e => { e.stopPropagation(); onDrop(e, player.id); }}
                   onDragOver={e => onDragOver(e, player.id)}
                   onDragLeave={onDragLeave}
                   onClick={() => onSelectCourt(player.id)}
