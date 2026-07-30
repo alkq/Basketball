@@ -817,6 +817,21 @@ export const BasketballBoard: React.FC = () => {
     setDropTargetId(null);
   }, [draggedId, isViewer]);
 
+  const handleCourtGridDrop = useCallback((e: React.DragEvent, team: 'home' | 'away') => {
+    e.preventDefault();
+    if (!draggedId || isViewer) return;
+    const setters = { home: setHomePlayers, away: setAwayPlayers };
+    const setter = setters[team];
+    setter(prev => {
+      const court = prev.filter(p => p.status === 'court');
+      const dragged = prev.find(p => p.id === draggedId);
+      if (court.length >= 5 || !dragged || dragged.status !== 'bench') return prev;
+      return prev.map(p => p.id === draggedId ? { ...p, status: 'court' as const } : p);
+    });
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, isViewer]);
+
   const addPoolPlayer = useCallback(() => {
     if (isViewer) return;
     const name = poolName.trim() || 'Player';
@@ -1204,7 +1219,8 @@ export const BasketballBoard: React.FC = () => {
                 onBenchClick={handleBenchClick} isViewer={isViewer}
                 onClear={() => setHomePlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))}
                 onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'home')}
-                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'home')} />
+                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'home')}
+                onCourtGridDrop={e => handleCourtGridDrop(e, 'home')} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1217,7 +1233,8 @@ export const BasketballBoard: React.FC = () => {
                 onBenchClick={handleBenchClick} isViewer={isViewer}
                 onClear={() => setAwayPlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))}
                 onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'away')}
-                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'away')} />
+                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'away')}
+                onCourtGridDrop={e => handleCourtGridDrop(e, 'away')} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1804,6 +1821,7 @@ const RosterPanel: React.FC<{
   onClear?: () => void;
   onEmptyCourtDrop?: (e: React.DragEvent) => void;
   onEmptyBenchDrop?: (e: React.DragEvent) => void;
+  onCourtGridDrop?: (e: React.DragEvent) => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
@@ -1811,7 +1829,8 @@ const RosterPanel: React.FC<{
   selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
   onClear,
   onEmptyCourtDrop,
-  onEmptyBenchDrop
+  onEmptyBenchDrop,
+  onCourtGridDrop
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -1862,7 +1881,11 @@ const RosterPanel: React.FC<{
               <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared - drop here</div>
             </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            <div
+              onDragOver={e => e.preventDefault()}
+              onDrop={onCourtGridDrop}
+              onDragLeave={onDragLeave}
+              className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
@@ -1936,7 +1959,11 @@ const RosterPanel: React.FC<{
               <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared - drop here</div>
             </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            <div
+              onDragOver={e => e.preventDefault()}
+              onDrop={benchPlayers.length === 0 ? onEmptyBenchDrop : undefined}
+              onDragLeave={onDragLeave}
+              className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
               {benchPlayers.map(player => (
                 <div key={player.id}
                   draggable={!isViewer}
