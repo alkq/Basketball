@@ -1088,6 +1088,61 @@ export const BasketballBoard: React.FC = () => {
               </div>
             </div>
 
+            {/* Player Pool */}
+            <div className="rounded-2xl border-2 border-slate-700/60 bg-slate-800/30 shadow-xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-700/40 flex items-center justify-between bg-slate-800/60">
+                <div className="flex items-center gap-2">
+                  <Users size={15} className="text-slate-400" />
+                  <h3 className="text-base font-bold text-slate-200">Player Pool</h3>
+                </div>
+                {poolPlayers.length > 0 && (
+                  <button onClick={() => setPoolPlayers([])} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
+                    <Trash2 size={10} /> Clear
+                  </button>
+                )}
+              </div>
+              <div className="p-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    value={poolName}
+                    onChange={e => setPoolName(e.target.value)}
+                    placeholder="Name"
+                    className="flex-1 bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-slate-500"
+                  />
+                  <input
+                    type="number"
+                    value={poolNumber}
+                    onChange={e => setPoolNumber(parseInt(e.target.value || '0'))}
+                    placeholder="#"
+                    className="w-14 bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-slate-500"
+                  />
+                  <button
+                    onClick={addPoolPlayer}
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm px-3 py-1 rounded-lg transition-colors">
+                    Add
+                  </button>
+                </div>
+                {poolPlayers.length === 0 ? (
+                  <div className="text-center text-[11px] text-slate-600 italic">No players in pool</div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                    {poolPlayers.map(player => (
+                      <div key={player.id}
+                        draggable
+                        onDragStart={e => handlePoolDragStart(e, player.id)}
+                        onDragEnd={() => setDraggedId(null)}
+                        className="relative p-1.5 rounded-xl border border-slate-700/40 bg-slate-800/20 flex flex-col items-center cursor-grab active:cursor-grabbing transition-all hover:scale-105">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 font-bold text-xs bg-slate-700/60 mb-0.5">
+                          <InlineNumber num={player.number} className="text-sm" compact disabled />
+                        </div>
+                        <div className="text-xs text-slate-400 truncate max-w-[64px]">{player.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Roster Panels */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <RosterPanel team="home" players={homePlayers}
@@ -1808,6 +1863,7 @@ const RosterPanel: React.FC<{
               );
             })}
           </div>
+        )}
         </div>
 
         <div>
@@ -1839,12 +1895,6 @@ const RosterPanel: React.FC<{
                   <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
                     className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
                   <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
-                  {!isViewer && onSwapFromBench && (
-                    <button onClick={(e) => { e.stopPropagation(); onSwapFromBench(player.id); }}
-                      className="mt-1 text-[10px] text-amber-300 hover:text-amber-200 border border-amber-700/40 rounded px-1.5 py-0.5 flex items-center gap-0.5">
-                      <ArrowRightLeft size={10} /> Swap
-                    </button>
-                  )}
                 </div>
               ))}
             </div>
