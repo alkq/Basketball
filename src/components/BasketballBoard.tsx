@@ -6,7 +6,7 @@ import {
   UserCheck, Edit3, Check, RotateCcw,
   Undo2, FileText, List, RefreshCw,
   LayoutDashboard, Move, Monitor, Smartphone,
-  Info, Pencil, Eraser, Trash2
+  Info, Pencil, Eraser, Trash2, Users
 } from 'lucide-react';
 
 // ==========================================
@@ -799,6 +799,49 @@ export const BasketballBoard: React.FC = () => {
     setDraggedId(null);
   }, [draggedId, executeSubstitution, isViewer]);
 
+  const handleEmptyCourtDrop = useCallback((e: React.DragEvent, team: 'home' | 'away') => {
+    e.preventDefault();
+    if (!draggedId || isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'court' as const } : p));
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, isViewer]);
+
+  const handleEmptyBenchDrop = useCallback((e: React.DragEvent, team: 'home' | 'away') => {
+    e.preventDefault();
+    if (!draggedId || isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'bench' as const } : p));
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, isViewer]);
+
+  const addPoolPlayer = useCallback(() => {
+    if (isViewer) return;
+    const name = poolName.trim() || 'Player';
+    const id = `pool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const newPlayer: Player = {
+      id,
+      name,
+      number: poolNumber || 1,
+      points: 0,
+      fouls: 0,
+      status: 'pool',
+      team: 'home',
+      x: 50,
+      y: 50,
+    };
+    setPoolPlayers(prev => [...prev, newPlayer]);
+    setPoolName('');
+  }, [poolName, poolNumber, isViewer]);
+
+  const handlePoolDragStart = useCallback((e: React.DragEvent, playerId: string) => {
+    if (isViewer) return;
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedId(playerId);
+  }, [isViewer]);
+
   const handleSetTime = useCallback(() => {
     if (isViewer) return;
     const m = parseInt(inputMins, 10);
@@ -1159,7 +1202,9 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={() => setHomePlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))} />
+                onClear={() => setHomePlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))}
+                onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'home')}
+                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'home')} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1170,7 +1215,9 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={() => setAwayPlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))} />
+                onClear={() => setAwayPlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))}
+                onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'away')}
+                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'away')} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1755,12 +1802,16 @@ const RosterPanel: React.FC<{
   onBenchClick: (id: string) => void;
   isViewer?: boolean;
   onClear?: () => void;
+  onEmptyCourtDrop?: (e: React.DragEvent) => void;
+  onEmptyBenchDrop?: (e: React.DragEvent) => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
   selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
-  onClear
+  onClear,
+  onEmptyCourtDrop,
+  onEmptyBenchDrop
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -1803,8 +1854,12 @@ const RosterPanel: React.FC<{
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
           {courtPlayers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
-              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
+            <div
+              onDragOver={e => e.preventDefault()}
+              onDrop={onEmptyCourtDrop}
+              onDragLeave={onDragLeave}
+              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared - drop here</div>
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
@@ -1873,8 +1928,12 @@ const RosterPanel: React.FC<{
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
           {benchPlayers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
-              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
+            <div
+              onDragOver={e => e.preventDefault()}
+              onDrop={onEmptyBenchDrop}
+              onDragLeave={onDragLeave}
+              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared - drop here</div>
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
