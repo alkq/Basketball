@@ -1983,18 +1983,24 @@ const RosterPanel: React.FC<{
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
           <div
             onDragOver={(e) => { e.preventDefault(); }}
-            onDrop={(e) => { if (onCourtDrop) onCourtDrop(e); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const target = e.target as HTMLElement;
+              const card = target.closest('[data-player-id]') as HTMLElement | null;
+              const targetId = card ? card.getAttribute('data-player-id') : null;
+              if (targetId && onDrop) onDrop(e as any, targetId);
+              else if (onCourtDrop) onCourtDrop(e);
+            }}
             className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
           >
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
                 <div key={player.id}
+                  data-player-id={player.id}
                   draggable={!isViewer}
                   onContextMenu={e => e.preventDefault()}
                   onDragStart={e => onDragStart(e, player.id)}
-                  onDragOver={e => e.stopPropagation()}
-                  onDrop={(e) => { e.stopPropagation(); onDrop(e, player.id); }}
                   onDragLeave={onDragLeave}
                   onClick={() => onSelectCourt(player.id)}
                   className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
@@ -2051,16 +2057,22 @@ const RosterPanel: React.FC<{
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
           <div
             onDragOver={(e) => { e.preventDefault(); }}
-            onDrop={(e) => { if (onBenchDrop) onBenchDrop(e); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const target = e.target as HTMLElement;
+              const card = target.closest('[data-player-id]') as HTMLElement | null;
+              const targetId = card ? card.getAttribute('data-player-id') : null;
+              if (targetId && onDrop) onDrop(e as any, targetId);
+              else if (onBenchDrop) onBenchDrop(e);
+            }}
             className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
           >
             {benchPlayers.map(player => (
               <div key={player.id}
+                data-player-id={player.id}
                 draggable={!isViewer}
                 onContextMenu={e => e.preventDefault()}
                 onDragStart={e => onDragStart(e, player.id)}
-                onDragOver={e => e.stopPropagation()}
-                onDrop={(e) => { e.stopPropagation(); onDrop(e, player.id); }}
                 onDragLeave={onDragLeave}
                 onClick={() => onBenchClick(player.id)}
                 onDoubleClick={() => onBenchClick(player.id)}
