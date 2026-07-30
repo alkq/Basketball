@@ -28,7 +28,7 @@ export interface Player {
   number: number;
   points: number;
   fouls: number;
-  status: 'court' | 'bench';
+  status: 'court' | 'bench' | 'pool';
   team: 'home' | 'away';
   x: number;
   y: number;
@@ -223,6 +223,7 @@ export const BasketballBoard: React.FC = () => {
   // Game States
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
+  const [poolPlayers, setPoolPlayers] = useState<Player[]>([]);
   const [gameTime, setGameTime] = useState(600);
   const [shotClock, setShotClock] = useState(24);
   const [isRunning, setIsRunning] = useState(false);
@@ -1098,7 +1099,8 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} isViewer={isViewer} />
+                onBenchClick={handleBenchClick} isViewer={isViewer}
+                onClear={() => setHomePlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1108,7 +1110,8 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} isViewer={isViewer} />
+                onBenchClick={handleBenchClick} isViewer={isViewer}
+                onClear={() => setAwayPlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1692,11 +1695,13 @@ const RosterPanel: React.FC<{
   onSelectCourt: (id: string) => void;
   onBenchClick: (id: string) => void;
   isViewer?: boolean;
+  onClear?: () => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
-  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false
+  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
+  onClear
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -1727,13 +1732,23 @@ const RosterPanel: React.FC<{
           <span>Bench: {benchPlayers.length}</span>
           <span className="text-slate-700">|</span>
           <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click/drag to sub</span>
+          {onClear && (
+            <button onClick={onClear} className="ml-1 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
+              <Trash2 size={10} /> Clear
+            </button>
+          )}
         </div>
       </div>
 
       <div className="p-3 space-y-3">
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+          {courtPlayers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
@@ -1797,31 +1812,43 @@ const RosterPanel: React.FC<{
 
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-            {benchPlayers.map(player => (
-              <div key={player.id}
-                draggable={!isViewer}
-                onContextMenu={e => e.preventDefault()}
-                onDragStart={e => onDragStart(e, player.id)}
-                onDrop={e => onDrop(e, player.id)}
-                onDragOver={e => onDragOver(e, player.id)}
-                onDragLeave={onDragLeave}
-                onClick={() => onBenchClick(player.id)}
-                className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
-                  isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}
-                `}>
-                <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
-                  isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
-                }`}>
-                  <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+          {benchPlayers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+              {benchPlayers.map(player => (
+                <div key={player.id}
+                  draggable={!isViewer}
+                  onContextMenu={e => e.preventDefault()}
+                  onDragStart={e => onDragStart(e, player.id)}
+                  onDrop={e => onDrop(e, player.id)}
+                  onDragOver={e => onDragOver(e, player.id)}
+                  onDragLeave={onDragLeave}
+                  onClick={() => onBenchClick(player.id)}
+                  className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
+                    isDragging(player.id) ? 'opacity-40 scale-95' : ''
+                  } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}`}
+                >
+                  <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
+                    isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
+                  }`}>
+                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+                  </div>
+                  <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
+                    className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
+                  <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
+                  {!isViewer && onSwapFromBench && (
+                    <button onClick={(e) => { e.stopPropagation(); onSwapFromBench(player.id); }}
+                      className="mt-1 text-[10px] text-amber-300 hover:text-amber-200 border border-amber-700/40 rounded px-1.5 py-0.5 flex items-center gap-0.5">
+                      <ArrowRightLeft size={10} /> Swap
+                    </button>
+                  )}
                 </div>
-                <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                  className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
-                <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
             
         <div>
