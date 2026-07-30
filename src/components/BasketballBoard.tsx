@@ -1986,24 +1986,32 @@ const RosterPanel: React.FC<{
               <Trash2 size={10} /> Clear
             </button>
           )}
+          {(!isViewer && onClear) && courtPlayers.length === 0 && benchPlayers.length === 0 ? null : (
+            <span className="text-[10px] text-slate-500 ml-1">Drag/drag/section to sub</span>
+          )}
         </div>
       </div>
 
       <div className="p-3 space-y-3">
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          <div
-            onDragOver={(e) => { e.preventDefault(); }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const target = e.target as HTMLElement;
-              const card = target.closest('[data-player-id]') as HTMLElement | null;
-              const targetId = card ? card.getAttribute('data-player-id') : null;
-              if (targetId && onDrop) onDrop(e as any, targetId);
-              else if (onCourtDrop) onCourtDrop(e);
-            }}
-            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
-          >
+          {courtPlayers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
+            </div>
+          ) : (
+            <div
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const target = e.target as HTMLElement;
+                const card = target.closest('[data-player-id]') as HTMLElement | null;
+                const targetId = card ? card.getAttribute('data-player-id') : null;
+                if (targetId && onDrop) onDrop(e as any, targetId);
+                else if (onCourtDrop) onCourtDrop(e);
+              }}
+              className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
+            >
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
@@ -2061,12 +2069,18 @@ const RosterPanel: React.FC<{
                 </div>
               );
             })}
-          </div>
+            </div>
+          )}
         </div>
 
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          <div
+          {benchPlayers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
+            </div>
+          ) : (
+            <div
             onDragOver={(e) => { e.preventDefault(); }}
             onDrop={(e) => {
               e.preventDefault();
@@ -2109,6 +2123,7 @@ const RosterPanel: React.FC<{
               </div>
             ))}
           </div>
+          )}
         </div>
             
         <div>
