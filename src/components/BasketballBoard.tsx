@@ -770,6 +770,11 @@ export const BasketballBoard: React.FC = () => {
     setPeriod(1);
     setGameEvents([]);
     setSelectedCourtId(null);
+    setTrainingHomeScore(0);
+    setTrainingAwayScore(0);
+    setTrainingHomeFouls(0);
+    setTrainingAwayFouls(0);
+    setTrainingUndo([]);
   }, [isViewer]);
 
   const renamePlayer = useCallback((team: 'home' | 'away', id: string, name: string) => {
@@ -1925,7 +1930,7 @@ const RosterPanel: React.FC<{
           <span>Bench: {benchPlayers.length}</span>
           <span className="text-slate-700">|</span>
           <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click/drag to sub</span>
-          {onClear && (
+          {!isViewer && onClear && (
             <button onClick={onClear} className="ml-1 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
               <Trash2 size={10} /> Clear
             </button>
