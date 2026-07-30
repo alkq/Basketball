@@ -218,16 +218,11 @@ export const BasketballBoard: React.FC = () => {
 
   // UI View States
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
-  const [view, setView] = useState<'scoreboard' | 'court'>(initialView);
+  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); 
 
   // Game States
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
-
-  // Player Pool State
-  const [poolPlayers, setPoolPlayers] = useState<Player[]>([]);
-  const [poolInputName, setPoolInputName] = useState('');
-  const [poolInputNumber, setPoolInputNumber] = useState('');
   const [gameTime, setGameTime] = useState(600);
   const [shotClock, setShotClock] = useState(24);
   const [isRunning, setIsRunning] = useState(false);
@@ -245,7 +240,7 @@ export const BasketballBoard: React.FC = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokeColor, setStrokeColor] = useState('#ff4444');
   const [penSize, setPenSize] = useState<number>(4);
-  const [eraserSize, setEraserSize] = useState<number>(12);
+  const [eraserSize, setEraserSize] = useState<number>(8);
   
   // Multi-Touch Pointer Drag Tracking Refs
   const activeDragsRef = useRef<Record<number, { 
@@ -774,63 +769,6 @@ export const BasketballBoard: React.FC = () => {
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
   }, [isViewer]);
 
-  const addPoolPlayer = useCallback(() => {
-    if (isViewer) return;
-    const name = poolInputName.trim();
-    if (!name) return;
-    const rawNum = poolInputNumber.trim();
-    const number = rawNum ? parseInt(rawNum, 10) : (poolPlayers.length + 1);
-    const id = `pool-${uid()}`;
-    setPoolPlayers(prev => [...prev, { id, name: name || `Player ${prev.length + 1}`, number: isNaN(number) ? prev.length + 1 : number, points: 0, fouls: 0, status: 'bench', team: 'home', x: 0, y: 0 }]);
-    setPoolInputName('');
-    setPoolInputNumber('');
-  }, [poolInputName, poolInputNumber, poolPlayers, isViewer]);
-
-  const removePoolPlayer = useCallback((id: string) => {
-    if (isViewer) return;
-    setPoolPlayers(prev => prev.filter(p => p.id !== id));
-  }, [isViewer]);
-
-  const movePoolToTeam = useCallback((poolId: string, team: 'home' | 'away') => {
-    if (isViewer) return;
-    const p = poolPlayers.find(x => x.id === poolId);
-    if (!p) return;
-    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
-    setter(prev => [...prev, { ...p, id: uid(), team, status: 'bench', x: team === 'home' ? 9.5 + prev.filter(x => x.team === team).length * 1 : 67 + prev.filter(x => x.team === team).length * 1, y: 91 }]);
-    setPoolPlayers(pr => pr.filter(x => x.id !== poolId));
-  }, [poolPlayers, isViewer]);
-
-  const moveRosterToPool = useCallback((playerId: string) => {
-    if (isViewer) return;
-    const all = [...homePlayers, ...awayPlayers];
-    const p = all.find(x => x.id === playerId);
-    if (!p) return;
-    const setter = p.team === 'home' ? setHomePlayers : setAwayPlayers;
-    setter(prev => prev.filter(x => x.id !== playerId));
-    setPoolPlayers(prev => [...prev, { ...p, id: `pool-${uid()}`, status: 'bench', team: 'home', x: 0, y: 0 }]);
-  }, [homePlayers, awayPlayers, isViewer]);
-
-  const clearRosters = useCallback(() => {
-    if (isViewer) return;
-    setHomePlayers([]);
-    setAwayPlayers([]);
-  }, [isViewer]);
-
-  const clearPool = useCallback(() => {
-    if (isViewer) return;
-    setPoolPlayers([]);
-  }, [isViewer]);
-
-  const clearHome = useCallback(() => {
-    if (isViewer) return;
-    setHomePlayers([]);
-  }, [isViewer]);
-
-  const clearAway = useCallback(() => {
-    if (isViewer) return;
-    setAwayPlayers([]);
-  }, [isViewer]);
-
   const handleSelectCourt = useCallback((id: string) => {
     if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
@@ -843,17 +781,9 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [selectedCourtId, executeSubstitution, isViewer]);
 
-  const handleSwapFromBench = useCallback((benchPlayerId: string) => {
-    if (isViewer) return;
-    const court = [...homePlayers, ...awayPlayers].find(p => p.status === 'court');
-    if (!court) return;
-    executeSubstitution(court.id, benchPlayerId);
-  }, [homePlayers, awayPlayers, executeSubstitution, isViewer]);
-
   const handleRosterDragStart = useCallback((e: React.DragEvent, playerId: string) => {
     if (isViewer) return;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/player-id', playerId);
     setDraggedId(playerId);
   }, [isViewer]);
 
@@ -864,48 +794,6 @@ export const BasketballBoard: React.FC = () => {
     executeSubstitution(draggedId, targetId);
     setDraggedId(null);
   }, [draggedId, executeSubstitution, isViewer]);
-
-  const handleCourtSectionDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (!draggedId || isViewer) return;
-    const all = [...homePlayers, ...awayPlayers];
-    const draggedPlayer = all.find(p => p.id === draggedId);
-    if (!draggedPlayer) return;
-    if (draggedPlayer.status === 'court') return;
-    const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
-    const lastCourt = [...teamPlayers].reverse().find(p => p.status === 'court');
-    if (!lastCourt) {
-      const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
-      setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'court' } : p));
-      setDraggedId(null);
-      setDropTargetId(null);
-      return;
-    }
-    executeSubstitution(draggedId, lastCourt.id);
-    setDraggedId(null);
-    setDropTargetId(null);
-  }, [draggedId, homePlayers, awayPlayers, executeSubstitution, isViewer]);
-
-  const handleBenchSectionDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (!draggedId || isViewer) return;
-    const all = [...homePlayers, ...awayPlayers];
-    const draggedPlayer = all.find(p => p.id === draggedId);
-    if (!draggedPlayer) return;
-    if (draggedPlayer.status === 'bench') return;
-    const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
-    const lastBench = [...teamPlayers].reverse().find(p => p.status === 'bench');
-    if (!lastBench) {
-      const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
-      setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'bench' } : p));
-      setDraggedId(null);
-      setDropTargetId(null);
-      return;
-    }
-    executeSubstitution(draggedId, lastBench.id);
-    setDraggedId(null);
-    setDropTargetId(null);
-  }, [draggedId, homePlayers, awayPlayers, executeSubstitution, isViewer]);
 
   const handleSetTime = useCallback(() => {
     if (isViewer) return;
@@ -1054,10 +942,6 @@ export const BasketballBoard: React.FC = () => {
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                         <RotateCcw size={13} /> Reset
                       </button>
-                      <button onClick={clearRosters}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/70 hover:bg-red-800 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                        <Trash2 size={13} /> Clear Rosters
-                      </button>
                       <button onClick={() => setView('court')}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                         <Move size={13} /> Open Tactical Page
@@ -1204,70 +1088,6 @@ export const BasketballBoard: React.FC = () => {
               </div>
             </div>
 
-            {/* Player Pool */}
-            <div className="rounded-2xl border border-slate-700/60 bg-slate-800/40 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <List size={16} className="text-amber-400" />
-                  <span className="text-sm font-bold text-amber-400">Player Pool</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-[10px] text-slate-500">Drag roster players here to unassign them</div>
-                  {!isViewer && (
-                    <button onClick={clearPool} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
-                      <Trash2 size={10} /> Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <input type="text" value={poolInputName} onChange={e => setPoolInputName(e.target.value)} placeholder="Player name"
-                  className="px-3 py-2 bg-slate-700/80 border border-slate-600 rounded-lg text-white text-xs focus:outline-none focus:border-amber-500 w-40" />
-                <input type="number" value={poolInputNumber} onChange={e => setPoolInputNumber(e.target.value)} placeholder="#"
-                  className="px-2 py-2 w-16 text-center bg-slate-700/80 border border-slate-600 rounded-lg text-white text-xs focus:outline-none focus:border-amber-500" />
-                <button onClick={addPoolPlayer}
-                  className="px-3 py-2 bg-amber-700/90 hover:bg-amber-600 text-white text-xs font-bold rounded-lg shadow transition-all active:scale-95">
-                  + Add
-                </button>
-              </div>
-
-              <div onDragOver={(e) => { e.preventDefault(); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const id = e.dataTransfer.getData('text/player-id');
-                  if (id) moveRosterToPool(id);
-                }}
-                className="min-h-[64px] rounded-xl border-2 border-dashed border-slate-700/70 p-2 flex flex-wrap gap-2">
-                {poolPlayers.length === 0 && (
-                  <span className="text-[11px] text-slate-600 italic px-2 py-1">Drop roster players here to remove them from Home/Away.</span>
-                )}
-                {poolPlayers.map(p => (
-                  <div key={p.id} draggable
-                    onDragStart={(e) => { e.dataTransfer.setData('text/player-id', p.id); e.dataTransfer.effectAllowed = 'move'; }}
-                    className="flex items-center gap-2 px-2.5 py-2 bg-slate-700/90 border border-slate-600 rounded-lg cursor-grab active:cursor-grabbing">
-                    <div className="w-6 h-6 rounded-full bg-slate-600 text-white font-black text-[10px] flex items-center justify-center">
-                      {p.number}
-                    </div>
-                    <span className="text-[11px] text-slate-200 truncate max-w-[80px]">{p.name}</span>
-                    <button onClick={() => removePoolPlayer(p.id)} className="text-slate-400 hover:text-red-400 transition-colors">
-                      <Trash2 size={12} />
-                    </button>
-                    <div className="flex gap-1 ml-1">
-                      <button onClick={() => movePoolToTeam(p.id, 'home')}
-                        className="px-2 py-1 rounded bg-orange-800/80 hover:bg-orange-700 text-orange-200 text-[10px] font-bold border border-orange-600/40">
-                        → Home
-                      </button>
-                      <button onClick={() => movePoolToTeam(p.id, 'away')}
-                        className="px-2 py-1 rounded bg-blue-800/80 hover:bg-blue-700 text-sky-200 text-[10px] font-bold border border-blue-600/40">
-                        → Away
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             {/* Roster Panels */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <RosterPanel team="home" players={homePlayers}
@@ -1279,11 +1099,7 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={clearHome}
-                onCourtDrop={handleCourtSectionDrop}
-                onBenchDrop={handleBenchSectionDrop}
-                onSwapFromBench={handleSwapFromBench} />
+                onBenchClick={handleBenchClick} isViewer={isViewer} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1293,11 +1109,7 @@ export const BasketballBoard: React.FC = () => {
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={clearAway}
-                onCourtDrop={handleCourtSectionDrop}
-                onBenchDrop={handleBenchSectionDrop}
-                onSwapFromBench={handleSwapFromBench} />
+                onBenchClick={handleBenchClick} isViewer={isViewer} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1367,7 +1179,7 @@ export const BasketballBoard: React.FC = () => {
                     <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
                     <div className="flex flex-col gap-1">
                       {homeScorers.length > 0 ? homeScorers.map((p, i) => (
-                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-950/10 border border-orange-700/20 px-2.5 py-1 rounded">
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-950/10 border border-orange-700/20 px-2 py-1 rounded">
                             <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
                             <span className="text-sm text-amber-200 truncate">#{p.number} {p.name}</span>
                             <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
@@ -1511,421 +1323,344 @@ export const BasketballBoard: React.FC = () => {
             </div>
 
             {/* DIAGRAM COURT AND CONTROLS CARD */}
-            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
+            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex flex-col items-center gap-4">
               
-              <div className={`w-full flex gap-4 items-center justify-center ${
-                isVerticalView ? 'flex-col' : 'flex-col sm:flex-row-reverse'
-              }`}>
-                
-                {/* TOOLBAR CONTROL PANEL (OUTSIDE THE COURT WORKSPACE - ADAPTIVE ORIENTATION) [1] */}
-                {!isViewer && (
-                  <div className={`bg-slate-900/95 border border-slate-700/50 rounded-xl shadow-lg select-none ${
-                    isVerticalView 
-                      ? 'flex flex-row flex-wrap items-center justify-center gap-2 p-1.5 w-full max-w-[420px]' 
-                      : 'flex flex-col gap-2 p-2.5 items-center'
-                  }`}>
-                    {/* Move Tool */}
-                    <button
-                      onClick={() => setActiveTool('move')}
-                      title="Move Players"
-                      className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
-                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
-                      } font-bold ${
-                        activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                      }`}
-                    >
-                      <Move size={15} /> {isVerticalView && 'Move'}
-                    </button>
-
-                    {/* Draw Tool */}
-                    <button
-                      onClick={() => setActiveTool('draw')}
-                      title="Draw Lines"
-                      className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
-                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
-                      } font-bold ${
-                        activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                      }`}
-                    >
-                      <Pencil size={15} /> {isVerticalView && 'Draw'}
-                    </button>
-
-                    {/* Erase Tool */}
-                    <button
-                      onClick={() => setActiveTool('erase')}
-                      title="Eraser"
-                      className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
-                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
-                      } font-bold ${
-                        activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
-                      }`}
-                    >
-                      <Eraser size={15} /> {isVerticalView && 'Erase'}
-                    </button>
-
-                    <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
-
-                    {/* Clear All Drawings */}
-                    <button
-                      onClick={() => {
-                        setDrawings([]);
-                        setCurrentDrawingPoints([]);
-                      }}
-                      title="Clear All Drawings"
-                      className={`p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors flex items-center justify-center ${
-                        isVerticalView ? 'gap-1 text-xs' : 'w-9 h-9'
-                      } font-bold`}
-                    >
-                      <Trash2 size={15} /> {isVerticalView && 'Clear'}
-                    </button>
-
-                    {/* Active Draw Settings (Color Selector + Pen Size Selector) [1] */}
-                    {activeTool === 'draw' && (
-                      <>
-                        <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
-                        
-                        {/* Color Palette */}
-                        <div className={`flex items-center gap-1.5 ${isVerticalView ? 'flex-row px-1' : 'flex-col py-1'}`}>
-                          {[
-                            ['#ff4444', 'bg-red-500'],
-                            ['#3b82f6', 'bg-blue-500'],
-                            ['#ffffff', 'bg-white border border-slate-600']
-                          ].map(([colorCode, bgClass]) => (
-                            <button
-                              key={colorCode}
-                              onClick={() => setStrokeColor(colorCode)}
-                              className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
-                                strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
-                              }`}
-                            />
-                          ))}
-                        </div>
-
-                        <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
-
-                        {/* Pen Size Selection Dots [1] */}
-                        <div className={`flex items-center gap-1.5 ${isVerticalView ? 'flex-row' : 'flex-col'}`}>
-                          {[2, 4, 8].map(sz => (
-                            <button
-                              key={sz}
-                              onClick={() => setPenSize(sz)}
-                              title={`${sz}px Stroke`}
-                              className={`rounded hover:bg-slate-800 transition-all flex items-center justify-center ${
-                                isVerticalView ? 'w-6 h-6' : 'w-7 h-7'
-                              } ${penSize === sz ? 'bg-amber-500/20 border border-amber-500' : 'border border-transparent'}`}
-                            >
-                              <span 
-                                className="bg-slate-300 rounded-full" 
-                                style={{ width: `${sz}px`, height: `${sz}px` }} 
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Active Eraser Settings (Eraser Size Selector) [1] */}
-                    {activeTool === 'erase' && (
-                      <>
-                        <div className={`${isVerticalView ? 'border-l h-6 mx-1' : 'border-t w-6 my-1'} border-slate-700/50`} />
-                        
-                        {/* Eraser Size Selection Boxes [1] */}
-                        <div className={`flex items-center gap-1.5 ${isVerticalView ? 'flex-row' : 'flex-col'}`}>
-                          {[6, 12, 20].map(sz => (
-                            <button
-                              key={sz}
-                              onClick={() => setEraserSize(sz)}
-                              title={`Eraser Size: ${sz}px`}
-                              className={`rounded hover:bg-slate-800 transition-all flex items-center justify-center ${
-                                isVerticalView ? 'w-6 h-6' : 'w-7 h-7'
-                              } ${eraserSize === sz ? 'bg-amber-500/20 border border-amber-500' : 'border border-transparent'}`}
-                            >
-                              <span 
-                                className="bg-slate-400 rounded-sm" 
-                                style={{ 
-                                  width: `${clamp(sz * 0.7, 4, 12)}px`, 
-                                  height: `${clamp(sz * 0.7, 4, 12)}px` 
-                                }} 
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                  </div>
-                )}
-
-                {/* COURT SVG PANEL WORKSPACE */}
-                <div className="w-full relative flex justify-center">
-                  <div ref={courtRef}
-                    onPointerDown={handleCourtBgPointerDown}
-                    onPointerMove={handleCourtBgPointerMove}
-                    onPointerUp={handleCourtBgPointerUp}
-                    onPointerCancel={handleCourtBgPointerUp}
-                    className={`relative w-full rounded-xl overflow-hidden select-none border-[3px] border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
-                      isVerticalView 
-                        ? 'aspect-[38/58] max-w-[420px] mx-auto' 
-                        : 'min-w-[560px] md:min-w-0 aspect-[58/38]'
-                    } ${courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'}`}
-                    style={{ backgroundColor: '#fdd2ab' }}
+              {/* TOOLBAR CONTROL PANEL (OUTSIDE THE COURT WORKSPACE) [1] */}
+              {!isViewer && (
+                <div className="flex flex-row flex-wrap items-center justify-center gap-2 p-1.5 bg-slate-900/95 border border-slate-700/50 rounded-xl shadow-lg select-none">
+                  <button
+                    onClick={() => setActiveTool('move')}
+                    title="Move Players"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
                   >
-                    
-                    {isVerticalView ? (
-                      // ==================================================
-                      // 1. VERTICAL VIEW SVG (ViewBox: 380 x 580)
-                      // ==================================================
-                      <svg viewBox="0 0 380 580" className="w-full h-full absolute inset-0 pointer-events-none select-none">
-                        <rect x="0" y="0" width="380" height="510" fill="#fdd2ab" />
-                        <rect x="0" y="510" width="380" height="70" fill="#dfd0c0" />
-                        <rect x="140" y="10" width="100" height="100" fill="#f2913f" />
-                        <rect x="140" y="410" width="100" height="100" fill="#f2913f" />
-                        
-                        {/* Court Boundary Lines (Thicker stroke width) */}
-                        <rect x="50" y="10" width="280" height="500" fill="none" stroke="white" strokeWidth="3.5" />
-                        <line x1="50" y1="260" x2="330" y2="260" stroke="white" strokeWidth="3.5" />
-                        
-                        {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
-                        <circle cx="190" cy="260" r="28" fill="none" stroke="white" strokeWidth="3" />
-                        <circle cx="190" cy="260" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
+                    <Move size={15} /> Move
+                  </button>
 
-                        {/* TOP BASKET ZONE (Wider corner three-point area, thicker strokes) [1] */}
-                        <line x1="140" y1="110" x2="240" y2="110" stroke="white" strokeWidth="3.5" />
-                        <path d="M 170,29 A 20,20 0 0,0 210,29" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
-                        <path d="M 140,110 A 50,50 0 0,0 240,110" fill="none" stroke="white" strokeWidth="3" />
-                        <path d="M 140,110 A 50,50 0 0,1 240,110" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                        <path d="M 75,10 L 75,80 A 115,115 0 0,0 305,80 L 305,10" fill="none" stroke="white" strokeWidth="3.2" />
-                        <line x1="160" y1="22" x2="220" y2="22" stroke="white" strokeWidth="4" />
-                        <line x1="190" y1="10" x2="190" y2="22" stroke="white" strokeWidth="2" />
-                        <circle cx="190" cy="29" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+                  <button
+                    onClick={() => setActiveTool('draw')}
+                    title="Draw Lines"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Pencil size={15} /> Draw
+                  </button>
 
-                        {/* BOTTOM BASKET ZONE (Wider corner three-point area, thicker strokes) [1] */}
-                        <line x1="140" y1="410" x2="240" y2="410" stroke="white" strokeWidth="2.5" />
-                        <path d="M 170,491 A 20,20 0 0,1 210,491" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
-                        <path d="M 140,410 A 50,50 0 0,1 240,410" fill="none" stroke="white" strokeWidth="3" />
-                        <path d="M 140,410 A 50,50 0 0,0 240,410" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                        <path d="M 75,510 L 75,440 A 115,115 0 0,1 305,440 L 305,510" fill="none" stroke="white" strokeWidth="3.2" />
-                        <line x1="160" y1="498" x2="220" y2="498" stroke="white" strokeWidth="4" />
-                        <line x1="190" y1="510" x2="190" y2="498" stroke="white" strokeWidth="2" />
-                        <circle cx="190" cy="491" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+                  <button
+                    onClick={() => setActiveTool('erase')}
+                    title="Eraser"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Eraser size={15} /> Eraser
+                  </button>
 
-                        {/* Hashmarks */}
-                        <line x1="50" y1="170" x2="60" y2="170" stroke="white" strokeWidth="2" />
-                        <line x1="50" y1="350" x2="60" y2="350" stroke="white" strokeWidth="2" />
-                        <line x1="320" y1="170" x2="330" y2="170" stroke="white" strokeWidth="2" />
-                        <line x1="320" y1="350" x2="330" y2="350" stroke="white" strokeWidth="2" />
+                  <div className="border-l h-6 mx-1 border-slate-700/50" />
 
-                        {/* Bench Graphic Outlines */}
-                        <rect x="20" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="150" y="525" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="250" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                  <button
+                    onClick={() => {
+                      setDrawings([]);
+                      setCurrentDrawingPoints([]);
+                    }}
+                    title="Clear All Drawings"
+                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
 
-                        <text x="75" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
-                        <text x="190" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Sub Box</text>
-                        <text x="305" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
-
-                        {/* Render drawings projected vertically with customizable stroke size [1] */}
-                        {drawings.map(drawing => (
-                          <polyline
-                            key={drawing.id}
-                            points={projectDrawings(drawing.points, true)}
-                            fill="none"
-                            stroke={drawing.color}
-                            strokeWidth={drawing.width || 4}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            opacity="0.9"
+                  {activeTool === 'draw' && (
+                    <>
+                      <div className="border-l h-6 mx-1 border-slate-700/50" />
+                      <div className="flex items-center gap-1.5 flex-row px-1">
+                        {[
+                          ['#ff4444', 'bg-red-500'],
+                          ['#3b82f6', 'bg-blue-500'],
+                          ['#ffffff', 'bg-white border border-slate-600']
+                        ].map(([colorCode, bgClass]) => (
+                          <button
+                            key={colorCode}
+                            onClick={() => setStrokeColor(colorCode)}
+                            className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
+                              strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
+                            }`}
                           />
                         ))}
-
-                        {currentDrawingPoints.length > 1 && (
-                          <polyline
-                            points={projectDrawings(currentDrawingPoints, true)}
-                            fill="none"
-                            stroke={strokeColor}
-                            strokeWidth={penSize}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            opacity="0.9"
-                          />
-                        )}
-
-                        {/* Vertical Labels */}
-                        {showDiagramLabels && (
-                          <g className="transition-opacity duration-300 opacity-95">
-                            <style>{`
-                              .diag-lbl { font-family: sans-serif; font-size: 9px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
-                            `}</style>
-                            <text x="65" y="25" className="diag-lbl" textAnchor="start">Corner</text>
-                            <text x="315" y="25" className="diag-lbl" textAnchor="end">Corner</text>
-                            <text x="65" y="495" className="diag-lbl" textAnchor="start">Corner</text>
-                            <text x="315" y="495" className="diag-lbl" textAnchor="end">Corner</text>
-                            
-                            <text x="140" y="125" className="diag-lbl" textAnchor="end">Elbow</text>
-                            <text x="240" y="125" className="diag-lbl" textAnchor="start">Elbow</text>
-                            <text x="140" y="395" className="diag-lbl" textAnchor="end">Elbow</text>
-                            <text x="240" y="395" className="diag-lbl" textAnchor="start">Elbow</text>
-                            
-                            <text x="190" y="70" className="diag-lbl" textAnchor="middle">Painted Area</text>
-                            <text x="190" y="455" className="diag-lbl" textAnchor="middle">Painted Area</text>
-
-                            <text x="190" y="170" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                            <text x="190" y="350" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                            
-                            <text x="190" y="270" className="diag-lbl" textAnchor="middle">Center Circle</text>
-                            <text x="190" y="250" className="diag-lbl" textAnchor="middle">Half-Court Line</text>
-                            <text x="45" y="260" className="diag-lbl" textAnchor="middle" transform="rotate(-90 45 260)">Sideline</text>
-                            <text x="190" y="505" className="diag-lbl" textAnchor="middle">Baseline</text>
-                          </g>
-                        )}
-                      </svg>
-                    ) : (
-                      // ==================================================
-                      // 2. HORIZONTAL VIEW SVG (ViewBox: 580 x 380)
-                      // ==================================================
-                      <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
-                        <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
-                        <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
-                        <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
-                        <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
-
-                        {/* Outer Court Lines (Thicker stroke) */}
-                        <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="3.5" />
-                        <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="3.5" />
-                        
-                        {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
-                        <circle cx="290" cy="170" r="28" fill="none" stroke="white" strokeWidth="3" />
-                        <circle cx="290" cy="170" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
-
-                        {/* Left Basket area lines (Wider corner three-point area, thicker strokes) [1] */}
-                        <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="3.5" />
-                        <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
-                        <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="3" />
-                        <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                        <path d="M 40,60 L 110,60 A 110,110 0 0,1 110,280 L 40,280" fill="none" stroke="white" strokeWidth="3.2" />
-                        <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="4" />
-                        <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="2" />
-                        <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
-
-                        {/* Right Basket area lines (Wider corner three-point area, thicker strokes) [1] */}
-                        <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="3.5" />
-                        <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
-                        <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="3" />
-                        <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
-                        <path d="M 540,60 L 470,60 A 110,110 0 0,0 470,280 L 540,280" fill="none" stroke="white" strokeWidth="3.2" />
-                        <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="4" />
-                        <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="2" />
-                        <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
-
-                        <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="2" />
-                        <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="2" />
-                        <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="2" />
-                        <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="2" />
-
-                        <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-                        <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
-
-                        <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
-                        <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substitution box</text>
-                        <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
-
-                        {/* Render drawings projected horizontally with customizable stroke size [1] */}
-                        {drawings.map(drawing => (
-                          <polyline
-                            key={drawing.id}
-                            points={projectDrawings(drawing.points, false)}
-                            fill="none"
-                            stroke={drawing.color}
-                            strokeWidth={drawing.width || 4}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            opacity="0.9"
-                          />
-                        ))}
-
-                        {currentDrawingPoints.length > 1 && (
-                          <polyline
-                            points={projectDrawings(currentDrawingPoints, false)}
-                            fill="none"
-                            stroke={strokeColor}
-                            strokeWidth={penSize}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            opacity="0.9"
-                          />
-                        )}
-
-                        {showDiagramLabels && (
-                          <g className="transition-opacity duration-300 opacity-95">
-                            <style>{`
-                              .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
-                            `}</style>
-                            <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
-                            <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
-                            <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
-                            
-                            <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
-                            <text x="480" y="125" className="diag-lbl" textAnchor="start">Low Post / Block</text>
-                            
-                            <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                            <text x="507" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
-                            
-                            <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
-                            <text x="435" y="115" className="diag-lbl" textAnchor="start">High Post / Elbow</text>
-                            
-                            <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                            <text x="375" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
-                            
-                            <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
-                            <text x="400" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
-
-                            <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
-                            <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
-                            <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
-                            <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
-
-                            <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
-                            <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
-                          </g>
-                        )}
-                      </svg>
-                    )}
-
-                    {/* ACTIVE PRESENTATION PLAYER TOKENS */}
-                    {[
-                      ...homePlayers,
-                      ...awayPlayers
-                    ].map(player => {
-                      const pos = getPlayerPos(player, isVerticalView);
-                      return (
-                        <div key={player.id}
-                          onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                          onPointerMove={e => handleCourtPointerMove(e, player.id)}
-                          onPointerUp={e => handleCourtPointerUp(e, player.id)}
-                          onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
-                          className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
-                          style={{ 
-                            left: `${pos.x}%`, 
-                            top: `${pos.y}%`, 
-                            transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
-                            pointerEvents: activeTool === 'move' ? 'auto' : 'none'
-                          }}>
-                          <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
-                            player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                          } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
-                            {player.number}
-                          </div>
-                          <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
-                            {player.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </div>
+              )}
 
+              {/* DIAGRAM PANEL */}
+              <div className="w-full relative">
+                <div ref={courtRef}
+                  onPointerDown={handleCourtBgPointerDown}
+                  onPointerMove={handleCourtBgPointerMove}
+                  onPointerUp={handleCourtBgPointerUp}
+                  onPointerCancel={handleCourtBgPointerUp}
+                  className={`relative w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
+                    isVerticalView 
+                      ? 'aspect-[38/58] max-w-[420px] mx-auto' 
+                      : 'min-w-[560px] md:min-w-0 aspect-[58/38]'
+                  } ${courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'}`}
+                  style={{ backgroundColor: '#fdd2ab' }}
+                >
+                  
+                  {isVerticalView ? (
+                    // ==================================================
+                    // 1. VERTICAL VIEW SVG (ViewBox: 380 x 580) [1]
+                    // ==================================================
+                    <svg viewBox="0 0 380 580" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                      <rect x="0" y="0" width="380" height="510" fill="#fdd2ab" />
+                      <rect x="0" y="510" width="380" height="70" fill="#dfd0c0" />
+                      <rect x="140" y="10" width="100" height="100" fill="#f2913f" />
+                      <rect x="140" y="410" width="100" height="100" fill="#f2913f" />
+                      
+                      {/* Court Boundary Lines (Thicker stroke) */}
+                      <rect x="50" y="10" width="280" height="500" fill="none" stroke="white" strokeWidth="3.5" />
+                      <line x1="50" y1="260" x2="330" y2="260" stroke="white" strokeWidth="3.5" />
+                      
+                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                      <circle cx="190" cy="260" r="28" fill="none" stroke="white" strokeWidth="3" />
+                      <circle cx="190" cy="260" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
+
+                      {/* TOP BASKET ZONE (Thicker stroke, wider corner three-point area) [1] */}
+                      <line x1="140" y1="110" x2="240" y2="110" stroke="white" strokeWidth="3.5" />
+                      <path d="M 170,29 A 20,20 0 0,0 210,29" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 140,110 A 50,50 0 0,0 240,110" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 140,110 A 50,50 0 0,1 240,110" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 75,10 L 75,80 A 115,115 0 0,0 305,80 L 305,10" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="160" y1="22" x2="220" y2="22" stroke="white" strokeWidth="4" />
+                      <line x1="190" y1="10" x2="190" y2="22" stroke="white" strokeWidth="2" />
+                      <circle cx="190" cy="29" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      {/* BOTTOM BASKET ZONE (Thicker lines, wider corner three-point area) [1] */}
+                      <line x1="140" y1="410" x2="240" y2="410" stroke="white" strokeWidth="2.5" />
+                      <path d="M 170,491 A 20,20 0 0,1 210,491" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                      <path d="M 140,410 A 50,50 0 0,1 240,410" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 140,410 A 50,50 0 0,0 240,410" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 75,510 L 75,440 A 115,115 0 0,1 305,440 L 305,510" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="160" y1="498" x2="220" y2="498" stroke="white" strokeWidth="4" />
+                      <line x1="190" y1="510" x2="190" y2="498" stroke="white" strokeWidth="2" />
+                      <circle cx="190" cy="491" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      {/* Hashmarks */}
+                      <line x1="50" y1="170" x2="60" y2="170" stroke="white" strokeWidth="2" />
+                      <line x1="50" y1="350" x2="60" y2="350" stroke="white" strokeWidth="2" />
+                      <line x1="320" y1="170" x2="330" y2="170" stroke="white" strokeWidth="2" />
+                      <line x1="320" y1="350" x2="330" y2="350" stroke="white" strokeWidth="2" />
+
+                      {/* Bench Graphic Outlines */}
+                      <rect x="20" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="150" y="525" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="250" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+
+                      <text x="75" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+                      <text x="190" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Sub Box</text>
+                      <text x="305" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+
+                      {/* Render drawings projected vertically */}
+                      {drawings.map(drawing => (
+                        <polyline
+                          key={drawing.id}
+                          points={projectDrawings(drawing.points, true)}
+                          fill="none"
+                          stroke={drawing.color}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      ))}
+
+                      {currentDrawingPoints.length > 1 && (
+                        <polyline
+                          points={projectDrawings(currentDrawingPoints, true)}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      )}
+
+                      {/* Vertical Labels */}
+                      {showDiagramLabels && (
+                        <g className="transition-opacity duration-300 opacity-95">
+                          <style>{`
+                            .diag-lbl { font-family: sans-serif; font-size: 9px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                          `}</style>
+                          <text x="65" y="25" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="315" y="25" className="diag-lbl" textAnchor="end">Corner</text>
+                          <text x="65" y="495" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="315" y="495" className="diag-lbl" textAnchor="end">Corner</text>
+                          
+                          <text x="140" y="125" className="diag-lbl" textAnchor="end">Elbow</text>
+                          <text x="240" y="125" className="diag-lbl" textAnchor="start">Elbow</text>
+                          <text x="140" y="395" className="diag-lbl" textAnchor="end">Elbow</text>
+                          <text x="240" y="395" className="diag-lbl" textAnchor="start">Elbow</text>
+                          
+                          <text x="190" y="70" className="diag-lbl" textAnchor="middle">Painted Area</text>
+                          <text x="190" y="455" className="diag-lbl" textAnchor="middle">Painted Area</text>
+
+                          <text x="190" y="170" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          <text x="190" y="350" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          
+                          <text x="190" y="270" className="diag-lbl" textAnchor="middle">Center Circle</text>
+                          <text x="190" y="250" className="diag-lbl" textAnchor="middle">Half-Court Line</text>
+                          <text x="45" y="260" className="diag-lbl" textAnchor="middle" transform="rotate(-90 45 260)">Sideline</text>
+                          <text x="190" y="505" className="diag-lbl" textAnchor="middle">Baseline</text>
+                        </g>
+                      )}
+                    </svg>
+                  ) : (
+                    // ==================================================
+                    // 2. HORIZONTAL VIEW SVG (ViewBox: 580 x 380) [1]
+                    // ==================================================
+                    <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                      <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
+                      <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
+                      <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
+                      <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
+
+                      {/* Outer Court Lines (Thicker stroke) */}
+                      <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="3.5" />
+                      <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="3.5" />
+                      
+                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                      <circle cx="290" cy="170" r="28" fill="none" stroke="white" strokeWidth="3" />
+                      <circle cx="290" cy="170" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
+
+                      {/* Basket area lines (Wider corner three-point area) [1] */}
+                      <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="3.5" />
+                      <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 40,60 L 110,60 A 110,110 0 0,1 110,280 L 40,280" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="4" />
+                      <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="2" />
+                      <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      {/* Right-hand side Basket area lines (Wider corner three-point area) [1] */}
+                      <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="3.5" />
+                      <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 540,60 L 470,60 A 110,110 0 0,0 470,280 L 540,280" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="4" />
+                      <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="2" />
+                      <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="2" />
+                      <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="2" />
+                      <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="2" />
+                      <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="2" />
+
+                      <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+
+                      <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+                      <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substitution box</text>
+                      <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+
+                      {drawings.map(drawing => (
+                        <polyline
+                          key={drawing.id}
+                          points={projectDrawings(drawing.points, false)}
+                          fill="none"
+                          stroke={drawing.color}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      ))}
+
+                      {currentDrawingPoints.length > 1 && (
+                        <polyline
+                          points={projectDrawings(currentDrawingPoints, false)}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      )}
+
+                      {showDiagramLabels && (
+                        <g className="transition-opacity duration-300 opacity-95">
+                          <style>{`
+                            .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                          `}</style>
+                          <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
+                          
+                          <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
+                          <text x="480" y="125" className="diag-lbl" textAnchor="start">Low Post / Block</text>
+                          
+                          <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                          <text x="507" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                          
+                          <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
+                          <text x="435" y="115" className="diag-lbl" textAnchor="start">High Post / Elbow</text>
+                          
+                          <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          <text x="375" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          
+                          <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+                          <text x="400" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+
+                          <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
+                          <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
+                          <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
+                          <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
+
+                          <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
+                          <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
+                        </g>
+                      )}
+                    </svg>
+                  )}
+
+                  {/* ACTIVE PRESENTATION PLAYER TOKENS */}
+                  {[
+                    ...homePlayers,
+                    ...awayPlayers
+                  ].map(player => {
+                    const pos = getPlayerPos(player, isVerticalView);
+                    return (
+                      <div key={player.id}
+                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
+                        onPointerMove={e => handleCourtPointerMove(e, player.id)}
+                        onPointerUp={e => handleCourtPointerUp(e, player.id)}
+                        onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
+                        style={{ 
+                          left: `${pos.x}%`, 
+                          top: `${pos.y}%`, 
+                          transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
+                          pointerEvents: activeTool === 'move' ? 'auto' : 'none'
+                        }}>
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
+                          player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                        } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
+                          {player.number}
+                        </div>
+                        <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
+                          {player.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                </div>
               </div>
             </div>
             
@@ -1958,19 +1693,11 @@ const RosterPanel: React.FC<{
   onSelectCourt: (id: string) => void;
   onBenchClick: (id: string) => void;
   isViewer?: boolean;
-  onClear?: () => void;
-  onCourtDrop?: (e: React.DragEvent) => void;
-  onBenchDrop?: (e: React.DragEvent) => void;
-  onSwapFromBench?: (id: string) => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
-  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
-  onClear,
-  onCourtDrop,
-  onBenchDrop,
-  onSwapFromBench
+  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -2001,52 +1728,22 @@ const RosterPanel: React.FC<{
           <span>Bench: {benchPlayers.length}</span>
           <span className="text-slate-700">|</span>
           <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click/drag to sub</span>
-          {!isViewer && onClear && (
-            <button onClick={onClear} className="ml-1 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
-              <Trash2 size={10} /> Clear
-            </button>
-          )}
-          {(!isViewer && onClear) && courtPlayers.length === 0 && benchPlayers.length === 0 ? null : (
-            <span className="text-[10px] text-slate-500 ml-1">Drag/drag/section to sub</span>
-          )}
         </div>
       </div>
 
       <div className="p-3 space-y-3">
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          {courtPlayers.length === 0 ? (
-            <div
-              onDragOver={(e) => { e.preventDefault(); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (onCourtDrop) onCourtDrop(e);
-              }}
-              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3"
-            >
-              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
-            </div>
-          ) : (
-            <div
-              onDragOver={(e) => { e.preventDefault(); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const target = e.target as HTMLElement;
-                const card = target.closest('[data-player-id]') as HTMLElement | null;
-                const targetId = card ? card.getAttribute('data-player-id') : null;
-                if (targetId && onDrop) onDrop(e as any, targetId);
-                else if (onCourtDrop) onCourtDrop(e);
-              }}
-              className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
-            >
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {courtPlayers.map((player, idx) => {
               const isSelected = selectedCourtId === player.id;
               return (
                 <div key={player.id}
-                  data-player-id={player.id}
                   draggable={!isViewer}
                   onContextMenu={e => e.preventDefault()}
                   onDragStart={e => onDragStart(e, player.id)}
+                  onDrop={e => onDrop(e, player.id)}
+                  onDragOver={e => onDragOver(e, player.id)}
                   onDragLeave={onDragLeave}
                   onClick={() => onSelectCourt(player.id)}
                   className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
@@ -2075,7 +1772,8 @@ const RosterPanel: React.FC<{
                         {[1, 2, 3].map(p => (
                           <button key={p}
                             onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                            className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">+{p}
+                            className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
+                            +{p}
                           </button>
                         ))}
                       </div>
@@ -2095,52 +1793,25 @@ const RosterPanel: React.FC<{
                 </div>
               );
             })}
-            </div>
-          )}
+          </div>
         </div>
 
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          {benchPlayers.length === 0 ? (
-            <div
-              onDragOver={(e) => { e.preventDefault(); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (onBenchDrop) onBenchDrop(e);
-              }}
-              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3"
-            >
-              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
-            </div>
-          ) : (
-            <div
-            onDragOver={(e) => { e.preventDefault(); }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const target = e.target as HTMLElement;
-              const card = target.closest('[data-player-id]') as HTMLElement | null;
-              const targetId = card ? card.getAttribute('data-player-id') : null;
-              if (targetId && onDrop) onDrop(e as any, targetId);
-              else if (onBenchDrop) onBenchDrop(e);
-            }}
-            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
-          >
-            {benchPlayers.map((player, idx) => {
-              const isSelected = selectedCourtId === player.id;
-              return (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            {benchPlayers.map(player => (
               <div key={player.id}
-                data-player-id={player.id}
                 draggable={!isViewer}
                 onContextMenu={e => e.preventDefault()}
                 onDragStart={e => onDragStart(e, player.id)}
+                onDrop={e => onDrop(e, player.id)}
+                onDragOver={e => onDragOver(e, player.id)}
                 onDragLeave={onDragLeave}
-                onClick={() => onSelectCourt(player.id)}
-                className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
+                onClick={() => onBenchClick(player.id)}
+                className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
                   isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
-                  isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
-                } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}
-              >
+                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}
+                `}>
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
                   isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
                 }`}>
@@ -2149,16 +1820,9 @@ const RosterPanel: React.FC<{
                 <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
                   className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
                 <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
-                {!isViewer && onSwapFromBench && (
-                  <button onClick={(e) => { e.stopPropagation(); onSwapFromBench(player.id); }}
-                    className="mt-1 text-[10px] text-amber-300 hover:text-amber-200 border border-amber-700/40 rounded px-1.5 py-0.5 flex items-center gap-0.5">
-                    <ArrowRightLeft size={10} /> Swap
-                  </button>
-                )}
               </div>
             ))}
           </div>
-          )}
         </div>
             
         <div>
