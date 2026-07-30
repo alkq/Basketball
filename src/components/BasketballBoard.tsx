@@ -1071,8 +1071,8 @@ export const BasketballBoard: React.FC = () => {
                     <span className="text-sm sm:text-base">Fouls:</span>
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${trainingHomeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{trainingHomeFouls}</span>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <button onClick={() => setTrainingHomeScore(s => Math.max(0, s - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                  <div className="mt-3 flex flex-wrap items-start gap-2">
+                    <button onClick={() => setTrainingHomeScore(Math.max(0, trainingHomeScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
                     <button onClick={() => { setTrainingHomeScore(s => s + 1); setTrainingUndo(prev => [...prev, { team: 'home', type: 'score', delta: 1 }]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
                     <button onClick={() => { setTrainingHomeScore(s => s + 2); setTrainingUndo(prev => [...prev, { team: 'home', type: 'score', delta: 2 }]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
                     <button onClick={() => { setTrainingHomeScore(s => s + 3); setTrainingUndo(prev => [...prev, { team: 'home', type: 'score', delta: 3 }]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
@@ -1175,7 +1175,7 @@ export const BasketballBoard: React.FC = () => {
                     <span className="text-base md:text-lg">Fouls:</span>
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${trainingAwayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{trainingAwayFouls}</span>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-start gap-2">
                     <button onClick={() => setTrainingAwayScore(Math.max(0, trainingAwayScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
                     <button onClick={() => { setTrainingAwayScore(s => s + 1); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
                     <button onClick={() => { setTrainingAwayScore(s => s + 2); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:2}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
