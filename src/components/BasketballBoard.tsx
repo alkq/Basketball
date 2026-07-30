@@ -360,11 +360,19 @@ export const BasketballBoard: React.FC = () => {
     if (p1.status === p2.status) return;
 
     const setter = p1.team === 'home' ? setHomePlayers : setAwayPlayers;
-    setter(prev => prev.map(p => {
-      if (p.id === p1.id) return { ...p, status: p2.status, x: p2.x, y: p2.y };
-      if (p.id === p2.id) return { ...p, status: p1.status, x: p1.x, y: p1.y };
-      return p;
-    }));
+    setter(prev => {
+      const idx1 = prev.findIndex(p => p.id === id1);
+      const idx2 = prev.findIndex(p => p.id === id2);
+      if (idx1 === -1 || idx2 === -1) return prev;
+      const status1 = p2.status;
+      const status2 = p1.status;
+      const x1 = p2.x; const y1 = p2.y;
+      const x2 = p1.x; const y2 = p1.y;
+      const result = [...prev];
+      result[idx1] = { ...prev[idx1], status: status1, x: x1, y: y1 };
+      result[idx2] = { ...prev[idx2], status: status2, x: x2, y: y2 };
+      return result;
+    });
   }, [homePlayers, awayPlayers, isViewer]);
 
   // ── LOCAL BROADCAST CHANNEL ──
@@ -2117,7 +2125,9 @@ const RosterPanel: React.FC<{
             }}
             className="grid grid-cols-3 sm:grid-cols-5 gap-1.5"
           >
-            {benchPlayers.map(player => (
+            {benchPlayers.map((player, idx) => {
+              const isSelected = selectedCourtId === player.id;
+              return (
               <div key={player.id}
                 data-player-id={player.id}
                 draggable={!isViewer}
