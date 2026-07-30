@@ -835,6 +835,13 @@ export const BasketballBoard: React.FC = () => {
     }
   }, [selectedCourtId, executeSubstitution, isViewer]);
 
+  const handleSwapFromBench = useCallback((benchPlayerId: string) => {
+    if (isViewer) return;
+    const court = [...homePlayers, ...awayPlayers].find(p => p.status === 'court');
+    if (!court) return;
+    executeSubstitution(court.id, benchPlayerId);
+  }, [homePlayers, awayPlayers, executeSubstitution, isViewer]);
+
   const handleRosterDragStart = useCallback((e: React.DragEvent, playerId: string) => {
     if (isViewer) return;
     e.dataTransfer.effectAllowed = 'move';
@@ -1255,7 +1262,8 @@ export const BasketballBoard: React.FC = () => {
                 onBenchClick={handleBenchClick} isViewer={isViewer}
                 onClear={clearHome}
                 onCourtDrop={handleCourtSectionDrop}
-                onBenchDrop={handleBenchSectionDrop} />
+                onBenchDrop={handleBenchSectionDrop}
+                onSwapFromBench={handleSwapFromBench} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1268,7 +1276,8 @@ export const BasketballBoard: React.FC = () => {
                 onBenchClick={handleBenchClick} isViewer={isViewer}
                 onClear={clearAway}
                 onCourtDrop={handleCourtSectionDrop}
-                onBenchDrop={handleBenchSectionDrop} />
+                onBenchDrop={handleBenchSectionDrop}
+                onSwapFromBench={handleSwapFromBench} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1932,6 +1941,7 @@ const RosterPanel: React.FC<{
   onClear?: () => void;
   onCourtDrop?: (e: React.DragEvent) => void;
   onBenchDrop?: (e: React.DragEvent) => void;
+  onSwapFromBench?: (id: string) => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
@@ -1939,7 +1949,8 @@ const RosterPanel: React.FC<{
   selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
   onClear,
   onCourtDrop,
-  onBenchDrop
+  onBenchDrop,
+  onSwapFromBench
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -2089,6 +2100,12 @@ const RosterPanel: React.FC<{
                 <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
                   className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
                 <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
+                {!isViewer && onSwapFromBench && (
+                  <button onClick={(e) => { e.stopPropagation(); onSwapFromBench(player.id); }}
+                    className="mt-1 text-[10px] text-amber-300 hover:text-amber-200 border border-amber-700/40 rounded px-1.5 py-0.5 flex items-center gap-0.5">
+                    <ArrowRightLeft size={10} /> Swap
+                  </button>
+                )}
               </div>
             ))}
           </div>
