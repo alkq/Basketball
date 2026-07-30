@@ -211,6 +211,8 @@ const projectDrawings = (points: { x: number; y: number }[], isVertical: boolean
 // MAIN COMPONENT
 // ==========================================
 export const BasketballBoard: React.FC = () => {
+  useEffect(() => { console.log('[BB] mount'); });
+
   // Sync Role States
   const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); 
   const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); 
@@ -224,6 +226,8 @@ export const BasketballBoard: React.FC = () => {
   const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
   const [poolPlayers, setPoolPlayers] = useState<Player[]>([]);
+  const [poolName, setPoolName] = useState('');
+  const [poolNumber, setPoolNumber] = useState<number>(1);
   const [gameTime, setGameTime] = useState(600);
   const [shotClock, setShotClock] = useState(24);
   const [isRunning, setIsRunning] = useState(false);
