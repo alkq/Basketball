@@ -865,15 +865,15 @@ export const BasketballBoard: React.FC = () => {
     if (!draggedPlayer) return;
     if (draggedPlayer.status === 'court') return;
     const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
-    const firstCourt = teamPlayers.find(p => p.status === 'court');
-    if (!firstCourt) {
+    const lastCourt = [...teamPlayers].reverse().find(p => p.status === 'court');
+    if (!lastCourt) {
       const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
       setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'court' } : p));
       setDraggedId(null);
       setDropTargetId(null);
       return;
     }
-    executeSubstitution(draggedId, firstCourt.id);
+    executeSubstitution(draggedId, lastCourt.id);
     setDraggedId(null);
     setDropTargetId(null);
   }, [draggedId, homePlayers, awayPlayers, executeSubstitution, isViewer]);
@@ -886,15 +886,15 @@ export const BasketballBoard: React.FC = () => {
     if (!draggedPlayer) return;
     if (draggedPlayer.status === 'bench') return;
     const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
-    const firstBench = teamPlayers.find(p => p.status === 'bench');
-    if (!firstBench) {
+    const lastBench = [...teamPlayers].reverse().find(p => p.status === 'bench');
+    if (!lastBench) {
       const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
       setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'bench' } : p));
       setDraggedId(null);
       setDropTargetId(null);
       return;
     }
-    executeSubstitution(draggedId, firstBench.id);
+    executeSubstitution(draggedId, lastBench.id);
     setDraggedId(null);
     setDropTargetId(null);
   }, [draggedId, homePlayers, awayPlayers, executeSubstitution, isViewer]);
@@ -2067,8 +2067,7 @@ const RosterPanel: React.FC<{
                         {[1, 2, 3].map(p => (
                           <button key={p}
                             onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                            className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
-                            +{p}
+                            className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">+{p}
                           </button>
                         ))}
                       </div>
@@ -2125,12 +2124,12 @@ const RosterPanel: React.FC<{
                 onContextMenu={e => e.preventDefault()}
                 onDragStart={e => onDragStart(e, player.id)}
                 onDragLeave={onDragLeave}
-                onClick={() => onBenchClick(player.id)}
-                onDoubleClick={() => onBenchClick(player.id)}
-                className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
+                onClick={() => onSelectCourt(player.id)}
+                className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
                   isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}`}
-                title="Double-click or drag onto court to substitute"
+                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
+                  isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
+                } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}
               >
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
                   isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
