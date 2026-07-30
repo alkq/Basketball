@@ -1065,11 +1065,31 @@ export const BasketballBoard: React.FC = () => {
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
-                    <button onClick={() => setHomeScore(s => Math.max(0, s - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
-                    <button onClick={() => setHomeScore(s => s + 1)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
-                    <button onClick={() => setHomeScore(s => s + 2)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
-                    <button onClick={() => setHomeScore(s => s + 3)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
-                    <button onClick={() => setHomePlayers(prev => prev.map(p => p.status === 'court' ? { ...p, fouls: p.fouls + 1 } : p))} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                    <button onClick={() => {
+                      const court = homePlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setHomePlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: Math.max(0, p.points - 1) } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                    <button onClick={() => {
+                      const court = homePlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setHomePlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: p.points + 1 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                    <button onClick={() => {
+                      const court = homePlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setHomePlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: p.points + 2 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                    <button onClick={() => {
+                      const court = homePlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setHomePlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: p.points + 3 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                    <button onClick={() => {
+                      const court = homePlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setHomePlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, fouls: p.fouls + 1 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
                     <button onClick={undoLast} disabled={gameEvents.length === 0} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
                   </div>
                 </div>
@@ -1159,11 +1179,31 @@ export const BasketballBoard: React.FC = () => {
                     <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
-                    <button onClick={() => setAwayScore(s => Math.max(0, s - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
-                    <button onClick={() => setAwayScore(s => s + 1)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
-                    <button onClick={() => setAwayScore(s => s + 2)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
-                    <button onClick={() => setAwayScore(s => s + 3)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
-                    <button onClick={() => setAwayPlayers(prev => prev.map(p => p.status === 'court' ? { ...p, fouls: p.fouls + 1 } : p))} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                    <button onClick={() => {
+                      const court = awayPlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setAwayPlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: Math.max(0, p.points - 1) } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                    <button onClick={() => {
+                      const court = awayPlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setAwayPlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: p.points + 1 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                    <button onClick={() => {
+                      const court = awayPlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setAwayPlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: p.points + 2 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                    <button onClick={() => {
+                      const court = awayPlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setAwayPlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, points: p.points + 3 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                    <button onClick={() => {
+                      const court = awayPlayers.filter(p => p.status === 'court');
+                      if (!court[0]) return;
+                      setAwayPlayers(prev => prev.map(p => p.id === court[0].id ? { ...p, fouls: p.fouls + 1 } : p));
+                    }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
                     <button onClick={undoLast} disabled={gameEvents.length === 0} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
                   </div>
                 </div>
