@@ -216,7 +216,12 @@ export const BasketballBoard: React.FC = () => {
   // Sync Role States
   const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); 
   const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); 
-  const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED'); 
+  const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED');
+  const [roomId, setRoomId] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'default';
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room') || 'default';
+  });
 
   // Training simple scoreboard state
   const [trainingHomeScore, setTrainingHomeScore] = useState(0);
@@ -384,7 +389,7 @@ export const BasketballBoard: React.FC = () => {
   // ── LOCAL BROADCAST CHANNEL ──
   useEffect(() => {
     try {
-      bcRef.current = new BroadcastChannel('scoreboard');
+      bcRef.current = new BroadcastChannel(`scoreboard-${roomId}`);
       const chan = bcRef.current;
       chan.onmessage = (ev) => {
         if (!ev.data) return;
@@ -399,7 +404,7 @@ export const BasketballBoard: React.FC = () => {
     } catch (e) {
       bcRef.current = null;
     }
-  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
+  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
 
   useEffect(() => {
     const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls };
@@ -415,33 +420,32 @@ export const BasketballBoard: React.FC = () => {
 
     setSyncStatus('CONNECTING...');
 
-    const channel = supabase.channel('basketball-sync', {
+    const channel = supabase.channel(`basketball-sync-${roomId}`, {
       config: { broadcast: { self: false } }
     });
 
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
-        if (mode === 'viewer') {
-          const data = response.payload;
-          if (!data) return;
-          setHomePlayers(data.homePlayers);
-          setAwayPlayers(data.awayPlayers);
-          setGameTime(data.gameTime);
-          
-          if (data.shotClock !== shotClock && (data.shotClock === 24 || data.shotClock === 14)) {
-            setTimerResetKey(k => k + 1);
-          }
-          setShotClock(data.shotClock);
-          
-          setIsRunning(data.isRunning);
-          setPeriod(data.period);
-          setGameEvents(data.gameEvents);
-          setView(data.view);
-          setClockMode(data.clockMode);
-          
-          if (data.drawings !== undefined) setDrawings(data.drawings);
-          if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
+        if (mode !== 'viewer') return;
+        const data = response.payload;
+        if (!data) return;
+        setHomePlayers(data.homePlayers);
+        setAwayPlayers(data.awayPlayers);
+        setGameTime(data.gameTime);
+        
+        if (data.shotClock !== shotClock && (data.shotClock === 24 || data.shotClock === 14)) {
+          setTimerResetKey(k => k + 1);
         }
+        setShotClock(data.shotClock);
+        
+        setIsRunning(data.isRunning);
+        setPeriod(data.period);
+        setGameEvents(data.gameEvents);
+        setView(data.view);
+        setClockMode(data.clockMode);
+        
+        if (data.drawings !== undefined) setDrawings(data.drawings);
+        if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
       })
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
@@ -460,7 +464,7 @@ export const BasketballBoard: React.FC = () => {
       supabase.removeChannel(channel);
       syncChannelRef.current = null;
     };
-  }, [mode, isSyncEnabled, shotClock]);
+  }, [mode, isSyncEnabled, roomId, shotClock]);
 
   // ── BROADCAST STATE CHANGES ──
   useEffect(() => {
@@ -483,7 +487,7 @@ export const BasketballBoard: React.FC = () => {
         currentDrawingPoints
       }
     });
-  }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints]);
+  }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, roomId]);
 
   // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ──
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
@@ -924,18 +928,26 @@ export const BasketballBoard: React.FC = () => {
                   : 'Sync Connection Closed'}
             </span>
             
+          <div className="flex items-center gap-2">
+            <input
+              value={roomId}
+              onChange={e => setRoomId(e.target.value || 'default')}
+              placeholder="Room"
+              className="w-28 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 text-xs"
+            />
             {supabase && (
               <button
                 onClick={() => setIsSyncEnabled(!isSyncEnabled)}
-                className={`ml-2 px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-all active:scale-95 ${
+                className={`ml-1 px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-all active:scale-95 ${
                   isSyncEnabled 
-                    ? 'bg-red-900/40 text-red-300 border border-red-700/30 hover:bg-red-900/60' 
+                    ? 'bg-red-900/40 text-red-300 border border-red-700/30 hover:bg-red-900/60'
                     : 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 hover:bg-emerald-900/60'
                 }`}
               >
                 {isSyncEnabled ? 'Close Sync' : 'Turn On Sync'}
               </button>
             )}
+          </div>
           </div>
           
           <div className="flex gap-2 bg-slate-800 p-1 rounded-lg">
