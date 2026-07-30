@@ -359,14 +359,13 @@ export const BasketballBoard: React.FC = () => {
       const idx1 = prev.findIndex(p => p.id === id1);
       const idx2 = prev.findIndex(p => p.id === id2);
       if (idx1 === -1 || idx2 === -1) return prev;
-      const status1 = p2.status;
-      const status2 = p1.status;
-      const x1 = p2.x; const y1 = p2.y;
-      const x2 = p1.x; const y2 = p1.y;
       const result = [...prev];
-      result[idx1] = { ...prev[idx1], status: status1, x: x1, y: y1 };
-      result[idx2] = { ...prev[idx2], status: status2, x: x2, y: y2 };
-      return result;
+      [result[idx1], result[idx2]] = [result[idx2], result[idx1]];
+      return result.map(p => {
+        if (p.id === id1) return { ...p, status: p2.status };
+        if (p.id === id2) return { ...p, status: p1.status };
+        return p;
+      });
     });
   }, [homePlayers, awayPlayers, isViewer]);
 
