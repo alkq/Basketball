@@ -1197,11 +1197,17 @@ export const BasketballBoard: React.FC = () => {
                         draggable
                         onDragStart={e => handlePoolDragStart(e, player.id)}
                         onDragEnd={() => setDraggedId(null)}
-                        className="relative p-1.5 rounded-xl border border-slate-700/40 bg-slate-800/20 flex flex-col items-center cursor-grab active:cursor-grabbing transition-all hover:scale-105">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 font-bold text-xs bg-slate-700/60 mb-0.5">
-                          <InlineNumber num={player.number} className="text-sm" compact disabled />
+                        className="relative group p-1 rounded-lg border border-slate-700/40 bg-slate-800/20 flex flex-col items-center cursor-grab active:cursor-grabbing transition-all hover:scale-105 hover:border-slate-600/60">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPoolPlayers(prev => prev.filter(p => p.id !== player.id)); setDraggedId(null); }}
+                          className="absolute -top-1.5 -right-1.5 rounded-full bg-slate-700 text-slate-300 hover:text-white hover:bg-red-900/70 border border-slate-600/60 shadow-sm transition-colors w-5 h-5 flex items-center justify-center leading-none"
+                          title="Remove">
+                          ✕
+                        </button>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 font-bold text-[10px] bg-slate-700/60 mb-0.5">
+                          <InlineNumber num={player.number} className="text-[11px]" compact disabled />
                         </div>
-                        <div className="text-xs text-slate-400 truncate max-w-[64px]">{player.name}</div>
+                        <div className="text-[10px] text-slate-400 truncate max-w-[54px] leading-tight">{player.name}</div>
                       </div>
                     ))}
                   </div>
