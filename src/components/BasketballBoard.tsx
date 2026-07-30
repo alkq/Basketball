@@ -866,7 +866,13 @@ export const BasketballBoard: React.FC = () => {
     if (draggedPlayer.status === 'court') return;
     const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
     const firstCourt = teamPlayers.find(p => p.status === 'court');
-    if (!firstCourt) return;
+    if (!firstCourt) {
+      const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
+      setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'court' } : p));
+      setDraggedId(null);
+      setDropTargetId(null);
+      return;
+    }
     executeSubstitution(draggedId, firstCourt.id);
     setDraggedId(null);
     setDropTargetId(null);
@@ -881,7 +887,13 @@ export const BasketballBoard: React.FC = () => {
     if (draggedPlayer.status === 'bench') return;
     const teamPlayers = draggedPlayer.team === 'home' ? homePlayers : awayPlayers;
     const firstBench = teamPlayers.find(p => p.status === 'bench');
-    if (!firstBench) return;
+    if (!firstBench) {
+      const setter = draggedPlayer.team === 'home' ? setHomePlayers : setAwayPlayers;
+      setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'bench' } : p));
+      setDraggedId(null);
+      setDropTargetId(null);
+      return;
+    }
     executeSubstitution(draggedId, firstBench.id);
     setDraggedId(null);
     setDropTargetId(null);
@@ -1996,7 +2008,14 @@ const RosterPanel: React.FC<{
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
           {courtPlayers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+            <div
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (onCourtDrop) onCourtDrop(e);
+              }}
+              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3"
+            >
               <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
             </div>
           ) : (
@@ -2076,7 +2095,14 @@ const RosterPanel: React.FC<{
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
           {benchPlayers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
+            <div
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (onBenchDrop) onBenchDrop(e);
+              }}
+              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3"
+            >
               <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared</div>
             </div>
           ) : (
