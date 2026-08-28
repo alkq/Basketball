@@ -1323,7 +1323,10 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={() => setHomePlayers(prev => prev.map(p => ({ ...p, status: 'pool' as const })))}
+                onClear={() => {
+                  setPoolPlayers(prev => [...prev, ...homePlayers.map(p => ({ ...p, status: 'pool' as const }))]);
+                  setHomePlayers([]);
+                }}
                 onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'home')}
                 onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'home')}
                 onCourtGridDrop={e => handleCourtGridDrop(e, 'home')}
@@ -1339,7 +1342,10 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={() => setAwayPlayers(prev => prev.map(p => ({ ...p, status: 'pool' as const })))}
+                onClear={() => {
+                  setPoolPlayers(prev => [...prev, ...awayPlayers.map(p => ({ ...p, status: 'pool' as const }))]);
+                  setAwayPlayers([]);
+                }}
                 onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'away')}
                 onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'away')}
                 onCourtGridDrop={e => handleCourtGridDrop(e, 'away')}
