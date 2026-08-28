@@ -745,7 +745,22 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers, isViewer]);
 
-  const undoLast = useCallback(() => {
+  const undoLast = useCallback((team: 'home' | 'away') => {
+    if (isViewer) return;
+    setGameEvents(prev => {
+      const last = [...prev].reverse().find(ev => ev.team === team);
+      if (!last) return prev;
+      const setter = last.team === 'home' ? setHomePlayers : setAwayPlayers;
+      setter(players => players.map(p =>
+        p.id === last.playerId
+          ? { ...p, [last.type === 'score' ? 'points' : 'fouls']: Math.max(0, (last.type === 'score' ? p.points : p.fouls) - last.value) }
+          : p
+      ));
+      return prev.filter(ev => ev.id !== last.id);
+    });
+  }, [isViewer]);
+
+  const undoAnyLast = useCallback(() => {
     if (isViewer) return;
     setGameEvents(prev => {
       if (!prev.length) return prev;
@@ -756,7 +771,7 @@ export const BasketballBoard: React.FC = () => {
           ? { ...p, [last.type === 'score' ? 'points' : 'fouls']: Math.max(0, (last.type === 'score' ? p.points : p.fouls) - last.value) }
           : p
       ));
-      return prev.slice(0, -1);
+      return prev.filter(ev => ev.id !== last.id);
     });
   }, [isViewer]);
 
@@ -870,6 +885,24 @@ export const BasketballBoard: React.FC = () => {
     setPoolPlayers(prev => [...prev, newPlayer]);
     setPoolName('');
   }, [poolName, poolNumber, isViewer]);
+
+  const movePoolPlayerToTeam = useCallback((playerId: string, team: 'home' | 'away') => {
+    if (isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => {
+      const existing = prev.find(p => p.id === playerId);
+      const inThisTeam = !!existing;
+      if (inThisTeam) return prev.map(p => p.id === playerId ? { ...p, status: 'bench' as const } : p);
+      const pool = poolPlayers.find(p => p.id === playerId);
+      if (!pool) return prev;
+      const court = prev.filter(p => p.status === 'court');
+      if (court.length >= 5) {
+        return [...prev, { ...pool, status: 'bench' as const, team }];
+      }
+      return [...prev, { ...pool, status: 'court' as const, team }];
+    });
+    setPoolPlayers(prev => prev.filter(p => p.id !== playerId));
+  }, [poolPlayers, isViewer]);
 
   const handlePoolDragStart = useCallback((e: React.DragEvent, playerId: string) => {
     if (isViewer) return;
@@ -1008,7 +1041,7 @@ export const BasketballBoard: React.FC = () => {
               <div className="flex items-center gap-2">
                 <div className="hidden sm:flex items-center gap-2">
                   {!isViewer && (
-                    <button onClick={undoLast} disabled={gameEvents.length === 0}
+                    <button onClick={undoAnyLast} disabled={gameEvents.length === 0}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
                       <Undo2 size={13} /> Undo Last
                     </button>
@@ -1047,7 +1080,7 @@ export const BasketballBoard: React.FC = () => {
                   {showMobileActions && (
                     <div className="absolute right-0 mt-2 w-44 bg-slate-800 border border-slate-700 rounded shadow-lg z-30 p-2 space-y-2">
                       {!isViewer && (
-                        <button onClick={undoLast} disabled={gameEvents.length === 0}
+                        <button onClick={undoAnyLast} disabled={gameEvents.length === 0}
                           className="w-full text-left px-2 py-1 rounded bg-amber-700/80 text-white text-sm disabled:opacity-40">Undo Last</button>
                       )}
                       <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
@@ -1080,12 +1113,12 @@ export const BasketballBoard: React.FC = () => {
                   <div className="relative">
                     <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full opacity-50" />
                     <div className="relative bg-gradient-to-br from-orange-500 to-orange-700 text-white text-6xl md:text-8xl lg:text-9xl font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums">
-                      {trainingHomeScore}
+                      {homeScore}
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-sm sm:text-base text-slate-400">
                     <span className="text-sm sm:text-base">Fouls:</span>
-                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${trainingHomeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{trainingHomeFouls}</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${homePlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0) >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homePlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0)}</span>
                   </div>
                   {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
                       <button onClick={() => setTrainingHomeScore(Math.max(0, trainingHomeScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
@@ -1184,12 +1217,12 @@ export const BasketballBoard: React.FC = () => {
                   <div className="relative">
                     <div className="absolute inset-0 bg-sky-500/20 blur-2xl rounded-full opacity-50" />
                     <div className="relative bg-gradient-to-br from-blue-500 to-blue-700 text-white text-6xl md:text-8xl lg:text-9xl font-black py-4 px-8 md:px-12 rounded-2xl shadow-2xl select-none leading-none tabular-nums">
-                      {trainingAwayScore}
+                      {awayScore}
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
                     <span className="text-base md:text-lg">Fouls:</span>
-                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${trainingAwayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{trainingAwayFouls}</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayPlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0) >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayPlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0)}</span>
                   </div>
                   {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
                       <button onClick={() => setTrainingAwayScore(Math.max(0, trainingAwayScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
@@ -1267,7 +1300,11 @@ export const BasketballBoard: React.FC = () => {
                           <InlineNumber num={player.number} className="text-[11px]" compact disabled />
                         </div>
                         <div className="text-[10px] text-slate-400 truncate max-w-[54px] leading-tight">{player.name}</div>
-                      </div>
+                        <div className="flex gap-1 mt-1">
+                          <button onClick={() => movePoolPlayerToTeam(player.id, 'home')} className="text-[9px] px-1.5 py-0.5 rounded bg-orange-700/80 text-white">H</button>
+                          <button onClick={() => movePoolPlayerToTeam(player.id, 'away')} className="text-[9px] px-1.5 py-0.5 rounded bg-sky-700/80 text-white">A</button>
+                        </div>
+                        </div>
                     ))}
                   </div>
                 )}
@@ -1286,10 +1323,12 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={() => setHomePlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))}
+                onClear={() => setHomePlayers(prev => prev.map(p => ({ ...p, status: 'pool' as const })))}
                 onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'home')}
                 onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'home')}
-                onCourtGridDrop={e => handleCourtGridDrop(e, 'home')} />
+                onCourtGridDrop={e => handleCourtGridDrop(e, 'home')}
+                onUndoLast={undoLast}
+                gameEvents={gameEvents} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1300,10 +1339,12 @@ export const BasketballBoard: React.FC = () => {
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
                 onBenchClick={handleBenchClick} isViewer={isViewer}
-                onClear={() => setAwayPlayers(prev => prev.map(p => ({ ...p, status: 'bench' })))}
+                onClear={() => setAwayPlayers(prev => prev.map(p => ({ ...p, status: 'pool' as const })))}
                 onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'away')}
                 onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'away')}
-                onCourtGridDrop={e => handleCourtGridDrop(e, 'away')} />
+                onCourtGridDrop={e => handleCourtGridDrop(e, 'away')}
+                onUndoLast={undoLast}
+                gameEvents={gameEvents} />
             </div>
 
             {/* Scoresheet Table */}
@@ -1891,6 +1932,8 @@ const RosterPanel: React.FC<{
   onEmptyCourtDrop?: (e: React.DragEvent) => void;
   onEmptyBenchDrop?: (e: React.DragEvent) => void;
   onCourtGridDrop?: (e: React.DragEvent) => void;
+  onUndoLast?: (team: 'home' | 'away') => void;
+  gameEvents?: GameEvent[];
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
@@ -1899,7 +1942,9 @@ const RosterPanel: React.FC<{
   onClear,
   onEmptyCourtDrop,
   onEmptyBenchDrop,
-  onCourtGridDrop
+  onCourtGridDrop,
+  onUndoLast,
+  gameEvents = []
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -1916,6 +1961,7 @@ const RosterPanel: React.FC<{
 
   const isDropTarget = (id: string) => dropTargetId === id && draggedId !== null && draggedId !== id;
   const isDragging = (id: string) => draggedId === id;
+  const lastTeamEvent = (team: 'home' | 'away') => [...gameEvents].reverse().find(ev => ev.team === team);
 
   return (
     <div className={`rounded-2xl border-2 ${borderColor} bg-slate-800/30 shadow-xl overflow-hidden`}>
@@ -1930,6 +1976,11 @@ const RosterPanel: React.FC<{
           <span>Bench: {benchPlayers.length}</span>
           <span className="text-slate-700">|</span>
           <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click/drag to sub</span>
+          {!isViewer && onUndoLast && lastTeamEvent(team) && (
+            <button onClick={() => onUndoLast(team)} className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-0.5">
+              <Undo2 size={10} /> Undo
+            </button>
+          )}
           {!isViewer && onClear && (
             <button onClick={onClear} className="ml-1 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
               <Trash2 size={10} /> Clear
@@ -1941,131 +1992,135 @@ const RosterPanel: React.FC<{
       <div className="p-3 space-y-3">
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          {courtPlayers.length === 0 ? (
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={onEmptyCourtDrop}
-              onDragLeave={onDragLeave}
-              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
-              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared - drop here</div>
-            </div>
-          ) : (
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={onCourtGridDrop}
-              onDragLeave={onDragLeave}
-              className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-            {courtPlayers.map((player, idx) => {
-              const isSelected = selectedCourtId === player.id;
-              return (
-                <div key={player.id}
-                  draggable={!isViewer}
-                  onContextMenu={e => e.preventDefault()}
-                  onDragStart={e => onDragStart(e, player.id)}
-                  onDrop={e => { e.stopPropagation(); onDrop(e, player.id); }}
-                  onDragOver={e => onDragOver(e, player.id)}
-                  onDragLeave={onDragLeave}
-                  onClick={() => onSelectCourt(player.id)}
-                  className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
-                    isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                  } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
-                    isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
-                  } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
-
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-xs md:text-sm mb-0.5 shadow-md ${
-                    isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                  }`}>
-                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
-                  </div>
-                  
-                  <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                    className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
-                  <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
-                  <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
-                    <span className="text-xs md:text-sm">Fouls:</span>
-                    <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-bold text-sm md:text-base`}>{player.fouls}</span>
-                  </div>
-                  
-                  {!isViewer && (
-                    <>
-                      <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
-                        {[1, 2, 3].map(p => (
-                          <button key={p}
-                            onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                            className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
-                            +{p}
-                          </button>
-                        ))}
-                      </div>
-                      
-                      <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
-                          className="bg-red-900/60 hover:bg-red-800 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-red-300 transition-colors active:scale-95">+F</button>
-                        {player.fouls > 0 && (
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => onCourtGridDrop(e)}
+            onDragLeave={onDragLeave}
+            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            {Array.from({ length: 5 }).map((_, idx) => {
+              const player = courtPlayers[idx];
+              if (player) {
+                const isSelected = selectedCourtId === player.id;
+                return (
+                  <div key={player.id}
+                    draggable={!isViewer}
+                    onContextMenu={e => e.preventDefault()}
+                    onDragStart={e => onDragStart(e, player.id)}
+                    onDrop={e => { e.stopPropagation(); onDrop(e, player.id); }}
+                    onDragOver={e => onDragOver(e, player.id)}
+                    onDragLeave={onDragLeave}
+                    onClick={() => onSelectCourt(player.id)}
+                    className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
+                      isDragging(player.id) ? 'opacity-40 scale-95' : ''
+                    } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
+                      isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
+                    } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-xs md:text-sm mb-0.5 shadow-md ${
+                      isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                    }`}>
+                      <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+                    </div>
+                    
+                    <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
+                      className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
+                    <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points} pts</div>
+                    <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
+                      <span className="text-xs md:text-sm">Fouls:</span>
+                      <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-bold text-sm md:text-base`}>{player.fouls}</span>
+                    </div>
+                    
+                    {!isViewer && (
+                      <>
+                        <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
+                          {[1, 2, 3].map(p => (
+                            <button key={p}
+                              onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
+                              className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
+                              +{p}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
                           <button
-                            onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
-                            className="bg-slate-700/50 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-slate-400 transition-colors active:scale-95">-F</button>
-                        )}
-                      </div>
-                    </>
-                  )}
+                            onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
+                            className="bg-red-900/60 hover:bg-red-800 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-red-300 transition-colors active:scale-95">+F</button>
+                          {player.fouls > 0 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
+                              className="bg-slate-700/50 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-slate-400 transition-colors active:scale-95">-F</button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div key={`empty-court-${idx}`}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => onEmptyCourtDrop(e)}
+                  onDragLeave={onDragLeave}
+                  className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3 min-h-[100px] flex items-center justify-center">
+                  <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Drop here</div>
                 </div>
               );
             })}
           </div>
-        )}
         </div>
 
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          {benchPlayers.length === 0 ? (
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={onEmptyBenchDrop}
-              onDragLeave={onDragLeave}
-              className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3">
-              <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Cleared - drop here</div>
-            </div>
-          ) : (
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={benchPlayers.length === 0 ? onEmptyBenchDrop : undefined}
-              onDragLeave={onDragLeave}
-              className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-              {benchPlayers.map(player => (
-                <div key={player.id}
-                  draggable={!isViewer}
-                  onContextMenu={e => e.preventDefault()}
-                  onDragStart={e => onDragStart(e, player.id)}
-                  onDrop={e => onDrop(e, player.id)}
-                  onDragOver={e => onDragOver(e, player.id)}
-                  onDragLeave={onDragLeave}
-                  onClick={() => onBenchClick(player.id)}
-                  className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
-                    isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                  } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}`}
-                >
-                  <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
-                    isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
-                  }`}>
-                    <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => onEmptyBenchDrop(e)}
+            onDragLeave={onDragLeave}
+            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            {Array.from({ length: Math.max(benchPlayers.length + 3, 6) }).map((_, idx) => {
+              const player = benchPlayers[idx];
+              if (player) {
+                return (
+                  <div key={player.id}
+                    draggable={!isViewer}
+                    onContextMenu={e => e.preventDefault()}
+                    onDragStart={e => onDragStart(e, player.id)}
+                    onDrop={e => { e.stopPropagation(); onDrop(e, player.id); }}
+                    onDragOver={e => onDragOver(e, player.id)}
+                    onDragLeave={onDragLeave}
+                    onClick={() => onBenchClick(player.id)}
+                    className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
+                      isDragging(player.id) ? 'opacity-40 scale-95' : ''
+                    } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}`}>
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
+                      isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
+                    }`}>
+                      <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+                    </div>
+                    <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
+                      className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
+                    <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points} pts</div>
                   </div>
-                  <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
-                    className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
-                  <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
+                );
+              }
+              return (
+                <div key={`empty-bench-${idx}`}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => onEmptyBenchDrop(e)}
+                  onDragLeave={onDragLeave}
+                  className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3 min-h-[80px] flex items-center justify-center">
+                  <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Drop here</div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
-            
+
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
-          <div className="flex items-center gap-4 text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
             {teamScorers.length > 0 ? teamScorers.map(p => (
-              <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
+              <div key={p.id} className={`flex items-center gap-2 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
                   <InlineNumber num={p.number} onSave={(v) => onChangeNumber(team, p.id, v)} className="text-xs" compact={true} disabled={isViewer} />
                 </div>
                 <div className="flex flex-col">
