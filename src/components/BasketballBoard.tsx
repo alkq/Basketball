@@ -246,6 +246,8 @@ export const BasketballBoard: React.FC = () => {
   const [inputMins, setInputMins] = useState('10');
   const [clockMode, setClockMode] = useState<'countdown' | 'stopwatch'>('countdown');
   const [period, setPeriod] = useState(1);
+  const [timeoutMode, setTimeoutMode] = useState(false);
+  const [timeoutSavedGameTime, setTimeoutSavedGameTime] = useState<number | null>(null);
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
   const [showDiagramLabels, setShowDiagramLabels] = useState(false);
@@ -790,6 +792,8 @@ export const BasketballBoard: React.FC = () => {
     setTrainingHomeFouls(0);
     setTrainingAwayFouls(0);
     setTrainingUndo([]);
+    setTimeoutMode(false);
+    setTimeoutSavedGameTime(null);
   }, [isViewer]);
 
   const renamePlayer = useCallback((team: 'home' | 'away', id: string, name: string) => {
@@ -912,12 +916,37 @@ export const BasketballBoard: React.FC = () => {
 
   const handleSetTime = useCallback(() => {
     if (isViewer) return;
-    const m = parseInt(inputMins, 10);
-    if (!isNaN(m) && m >= 0) {
-      setGameTime(m * 60);
-      setIsRunning(false);
+    const raw = inputMins.trim();
+    let seconds: number;
+    if (raw.includes(':')) {
+      const [m, s] = raw.split(':').map(Number);
+      seconds = (isNaN(m) ? 0 : m) * 60 + (isNaN(s) ? 0 : s);
+    } else {
+      const m = parseInt(raw, 10);
+      seconds = isNaN(m) ? 0 : m * 60;
     }
+    setTimeoutMode(false);
+    setTimeoutSavedGameTime(null);
+    setGameTime(Math.max(0, seconds));
+    setIsRunning(false);
   }, [inputMins, isViewer]);
+
+  const startTimeout = useCallback((seconds: number) => {
+    if (isViewer) return;
+    setTimeoutSavedGameTime(gameTime);
+    setGameTime(Math.max(0, seconds));
+    setIsRunning(true);
+    setTimeoutMode(true);
+  }, [gameTime, isViewer]);
+
+  const resumeFromTimeout = useCallback(() => {
+    if (isViewer) return;
+    const restored = timeoutSavedGameTime ?? 0;
+    setGameTime(Math.max(0, restored));
+    setIsRunning(false);
+    setTimeoutMode(false);
+    setTimeoutSavedGameTime(null);
+  }, [timeoutSavedGameTime, isViewer]);
 
   const handleResetShotClock = (seconds: number) => {
     if (isViewer) return;
@@ -1155,22 +1184,33 @@ export const BasketballBoard: React.FC = () => {
                       {formatTime(gameTime)}
                     </div>
                     {!isViewer && (
-                      <div className="flex items-center gap-1.5 mt-1.5 justify-center">
-                        <input type="number" min="0" max="999" value={inputMins} onChange={e => setInputMins(e.target.value)}
-                          className="w-12 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
+                      <div className="flex items-center gap-1.5 mt-1.5 justify-center flex-wrap">
+                        <input type="text" inputMode="numeric" min="0" max="999" value={inputMins} onChange={e => setInputMins(e.target.value)}
+                          placeholder="m or m:ss"
+                          className="w-16 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
                         <button onClick={handleSetTime} className="bg-slate-600 hover:bg-slate-500 text-white text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1">
                           <Timer size={10} />Set
                         </button>
-                        <div className="ml-2 inline-flex rounded overflow-hidden border border-slate-700/50">
-                          <button onClick={() => setClockMode('countdown')}
+                        <div className="inline-flex rounded overflow-hidden border border-slate-700/50 ml-1">
+                          <button onClick={() => { setClockMode('countdown'); }}
                             className={`px-2 text-[10px] py-0.5 ${clockMode === 'countdown' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
                             Countdown
                           </button>
-                          <button onClick={() => setClockMode('stopwatch')}
+                          <button onClick={() => { setClockMode('stopwatch'); }}
                             className={`px-2 text-[10px] py-0.5 ${clockMode === 'stopwatch' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
                             Stopwatch
                           </button>
                         </div>
+                        {timeoutMode ? (
+                          <button onClick={resumeFromTimeout} className="ml-2 bg-emerald-700/90 hover:bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                            Resume
+                          </button>
+                        ) : (
+                          <div className="inline-flex gap-1 ml-2">
+                            <button onClick={() => startTimeout(60)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">TO 1m</button>
+                            <button onClick={() => startTimeout(30)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">TO 30s</button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
