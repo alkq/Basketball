@@ -1261,8 +1261,8 @@ export const BasketballBoard: React.FC = () => {
                   )}
                   {!isViewer && !timeoutMode && (
                     <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-                      <button onClick={() => startTimeout(60)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">TO 1m</button>
-                      <button onClick={() => startTimeout(30)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">TO 30s</button>
+                      <button onClick={() => startTimeout(30)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">30s</button>
+                      <button onClick={() => startTimeout(60)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">1m</button>
                       <button onClick={() => startTimeout(180)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">3m</button>
                       <button onClick={() => startTimeout(300)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">5m</button>
                       <button onClick={() => startTimeout(600)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">10m</button>
