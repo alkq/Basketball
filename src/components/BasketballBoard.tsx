@@ -853,6 +853,17 @@ export const BasketballBoard: React.FC = () => {
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
   }, [isViewer]);
 
+  const removePlayer = useCallback((team: 'home' | 'away', id: string) => {
+    if (isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => {
+      const target = prev.find(p => p.id === id);
+      if (!target) return prev;
+      setPoolPlayers(pool => [...pool, { ...target, status: 'pool' as const }]);
+      return prev.filter(p => p.id !== id);
+    });
+  }, [isViewer, setHomePlayers, setAwayPlayers, setPoolPlayers]);
+
   const handleSelectCourt = useCallback((id: string) => {
     if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
@@ -1429,7 +1440,8 @@ export const BasketballBoard: React.FC = () => {
                 onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'home')}
                 onCourtGridDrop={e => handleCourtGridDrop(e, 'home')}
                 onUndoLast={undoLast}
-                gameEvents={gameEvents} />
+                gameEvents={gameEvents}
+                onRemovePlayer={removePlayer} />
               <RosterPanel team="away" players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
@@ -1448,7 +1460,8 @@ export const BasketballBoard: React.FC = () => {
                 onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'away')}
                 onCourtGridDrop={e => handleCourtGridDrop(e, 'away')}
                 onUndoLast={undoLast}
-                gameEvents={gameEvents} />
+                gameEvents={gameEvents}
+                onRemovePlayer={removePlayer} />
             </div>
 
             {/* Scoresheet Table */}
@@ -2035,17 +2048,15 @@ const RosterPanel: React.FC<{
   onCourtGridDrop?: (e: React.DragEvent) => void;
   onUndoLast?: (team: 'home' | 'away') => void;
   gameEvents?: GameEvent[];
+  onRemovePlayer?: (team: 'home' | 'away', id: string) => void;
 }> = ({ 
   team, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
-  selectedCourtId, onSelectCourt, onBenchClick, isViewer = false,
-  onClear,
-  onEmptyCourtDrop,
-  onEmptyBenchDrop,
-  onCourtGridDrop,
-  onUndoLast,
-  gameEvents = []
+  selectedCourtId, onSelectCourt, onBenchClick,
+  isViewer, onClear,
+  onEmptyCourtDrop, onEmptyBenchDrop, onCourtGridDrop,
+  onUndoLast, gameEvents, onRemovePlayer
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -2121,6 +2132,12 @@ const RosterPanel: React.FC<{
                     }`}>
                       <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
                     </div>
+                    {!isViewer && onRemovePlayer && (
+                      <button onClick={(e) => { e.stopPropagation(); onRemovePlayer(team, player.id); }}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-900/90 border border-slate-600 text-slate-300 hover:text-white hover:border-white flex items-center justify-center leading-none">
+                        ✕
+                      </button>
+                    )}
                     
                     <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
                       className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
