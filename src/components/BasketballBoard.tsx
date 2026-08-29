@@ -248,6 +248,7 @@ export const BasketballBoard: React.FC = () => {
   const [period, setPeriod] = useState(1);
   const [timeoutMode, setTimeoutMode] = useState(false);
   const [timeoutSavedGameTime, setTimeoutSavedGameTime] = useState<number | null>(null);
+  const [timeoutRemaining, setTimeoutTimeoutRemaining] = useState<number>(0);
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
   const [showDiagramLabels, setShowDiagramLabels] = useState(false);
@@ -669,7 +670,7 @@ export const BasketballBoard: React.FC = () => {
 
   // ── INDEPENDENT GAME CLOCK LOOP ──
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || timeoutMode) return;
     const t = setInterval(() => {
       setGameTime(p => {
         if (clockMode === 'countdown') {
@@ -680,7 +681,24 @@ export const BasketballBoard: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, clockMode]);
+  }, [isRunning, clockMode, timeoutMode]);
+
+  // ── TIMEOUT DURATION LOOP ──
+  useEffect(() => {
+    if (!isRunning || !timeoutMode) return;
+    const t = setInterval(() => {
+      setTimeoutTimeoutRemaining(p => {
+        if (p <= 1) {
+          setIsRunning(false);
+          setTimeoutMode(false);
+          setTimeoutTimeoutRemaining(0);
+          return 0;
+        }
+        return p - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isRunning, timeoutMode]);
 
   // ── INDEPENDENT SHOT CLOCK LOOP ──
   useEffect(() => {
@@ -794,6 +812,7 @@ export const BasketballBoard: React.FC = () => {
     setTrainingUndo([]);
     setTimeoutMode(false);
     setTimeoutSavedGameTime(null);
+    setTimeoutTimeoutRemaining(0);
   }, [isViewer]);
 
   const renamePlayer = useCallback((team: 'home' | 'away', id: string, name: string) => {
@@ -934,19 +953,18 @@ export const BasketballBoard: React.FC = () => {
   const startTimeout = useCallback((seconds: number) => {
     if (isViewer) return;
     setTimeoutSavedGameTime(gameTime);
-    setGameTime(Math.max(0, seconds));
+    setTimeoutTimeoutRemaining(Math.max(0, seconds));
     setIsRunning(true);
     setTimeoutMode(true);
   }, [gameTime, isViewer]);
 
   const resumeFromTimeout = useCallback(() => {
     if (isViewer) return;
-    const restored = timeoutSavedGameTime ?? 0;
-    setGameTime(Math.max(0, restored));
     setIsRunning(false);
     setTimeoutMode(false);
+    setTimeoutTimeoutRemaining(0);
     setTimeoutSavedGameTime(null);
-  }, [timeoutSavedGameTime, isViewer]);
+  }, [isViewer]);
 
   const handleResetShotClock = (seconds: number) => {
     if (isViewer) return;
@@ -1220,7 +1238,7 @@ export const BasketballBoard: React.FC = () => {
                   <div className="text-center">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">{timeoutMode ? 'Timeout Duration' : 'Shot Clock'}</span>
                     <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${timeoutMode ? 'text-amber-400' : shotClock === 0 ? 'text-red-500 animate-bounce' : shotUrgent ? 'text-red-400 animate-pulse' : 'text-rose-400'}`}>
-                      {timeoutMode ? formatTime(gameTime) : shotClock}
+                      {timeoutMode ? formatTime(timeoutRemaining) : shotClock}
                     </div>
                     {!isViewer && (
                       <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
