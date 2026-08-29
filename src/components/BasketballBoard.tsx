@@ -258,6 +258,39 @@ export const BasketballBoard: React.FC = () => {
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(initialRosterState.away);
   const [poolPlayers, setPoolPlayers] = useState<Player[]>(initialRosterState.pool);
 
+  // Standalone tactical board tokens - independent from roster state
+  const loadTacticalState = useCallback(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('basketball-tactics');
+      if (!raw) {
+        // Default 5v5 tokens
+        return [
+          { id: 'h1', team: 'home' as const, number: 1, x: 27.5, y: 30 },
+          { id: 'h2', team: 'home' as const, number: 2, x: 22, y: 22 },
+          { id: 'h3', team: 'home' as const, number: 3, x: 33, y: 22 },
+          { id: 'h4', team: 'home' as const, number: 4, x: 18, y: 45 },
+          { id: 'h5', team: 'home' as const, number: 5, x: 37, y: 45 },
+          { id: 'a1', team: 'away' as const, number: 1, x: 72.5, y: 70 },
+          { id: 'a2', team: 'away' as const, number: 2, x: 67, y: 78 },
+          { id: 'a3', team: 'away' as const, number: 3, x: 78, y: 78 },
+          { id: 'a4', team: 'away' as const, number: 4, x: 63, y: 55 },
+          { id: 'a5', team: 'away' as const, number: 5, x: 82, y: 55 },
+        ];
+      }
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.tokens)) return data.tokens;
+    } catch { /* ignore */ }
+    return [];
+  }, []);
+  const initialTacticalTokens = loadTacticalState();
+  const [tacticTokens, setTacticTokens] = useState<{id: string; team: 'home' | 'away'; number: number; x: number; y: number}[]>(initialTacticalTokens);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('basketball-tactics', JSON.stringify({ tokens: tacticTokens }));
+  }, [tacticTokens]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem('basketball-roster-state', JSON.stringify({
@@ -533,14 +566,13 @@ export const BasketballBoard: React.FC = () => {
     const startX = ((e.clientX - rect.left) / rect.width) * 100;
     const startY = ((e.clientY - rect.top) / rect.height) * 100;
 
-    const allPlayers = [...homePlayers, ...awayPlayers];
-    const p = allPlayers.find(pl => pl.id === playerId);
+    const p = tacticTokens.find(pl => pl.id === playerId);
     if (!p) return;
 
     e.currentTarget.setPointerCapture(e.pointerId);
 
-    // Get position in current visual perspective (vertical or horizontal) [1]
-    const projected = getPlayerPos(p, isVerticalView);
+    // Get position in current visual perspective (vertical or horizontal)
+    const projected = isVerticalView ? { x: p.y, y: p.x } : { x: p.x, y: p.y };
 
     activeDragsRef.current[e.pointerId] = {
       playerId,
@@ -574,20 +606,11 @@ export const BasketballBoard: React.FC = () => {
     let updatedY = visualY;
 
     if (isVerticalView) {
-      // Swapping values back to persistent horizontal profiles [1]
       updatedX = visualY;
       updatedY = visualX;
     }
 
-    const updater = (prev: Player[]) => prev.map(p => {
-      if (p.id === playerId) {
-        return { ...p, x: updatedX, y: updatedY };
-      }
-      return p;
-    });
-
-    setHomePlayers(updater);
-    setAwayPlayers(updater);
+    setTacticTokens(prev => prev.map(t => t.id === playerId ? { ...t, x: updatedX, y: updatedY } : t));
   };
 
   const handleCourtPointerUp = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
@@ -1984,28 +2007,25 @@ export const BasketballBoard: React.FC = () => {
                   )}
 
                   {/* ACTIVE PRESENTATION PLAYER TOKENS */}
-                  {[
-                    ...homePlayers,
-                    ...awayPlayers
-                  ].map(player => {
-                    const pos = getPlayerPos(player, isVerticalView);
+                  {tacticTokens.map(token => {
+                    const pos = isVerticalView ? { x: token.y, y: token.x } : { x: token.x, y: token.y };
                     return (
-                      <div key={player.id}
-                        onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                        onPointerMove={e => handleCourtPointerMove(e, player.id)}
-                        onPointerUp={e => handleCourtPointerUp(e, player.id)}
-                        onPointerCancel={e => handleCourtPointerCancel(e, player.id)}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === player.id ? 'z-20 scale-110' : ''} ${player.status === 'bench' ? 'opacity-85' : ''}`}
+                      <div key={token.id}
+                        onPointerDown={e => handleCourtPointerDown(e, token.id)}
+                        onPointerMove={e => handleCourtPointerMove(e, token.id)}
+                        onPointerUp={e => handleCourtPointerUp(e, token.id)}
+                        onPointerCancel={e => handleCourtPointerCancel(e, token.id)}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === token.id ? 'z-20 scale-110' : ''}`}
                         style={{ 
                           left: `${pos.x}%`, 
                           top: `${pos.y}%`, 
-                          transition: courtDragId === player.id ? 'none' : 'transform 0.1s',
+                          transition: courtDragId === token.id ? 'none' : 'transform 0.1s',
                           pointerEvents: activeTool === 'move' ? 'auto' : 'none'
                         }}>
                         <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
-                          player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                        } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
-                          {player.number}
+                          token.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                        } ${courtDragId === token.id ? 'ring-2 ring-yellow-400' : ''}`}>
+                          {token.number}
                         </div>
                       </div>
                     );
