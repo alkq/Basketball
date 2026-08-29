@@ -133,6 +133,7 @@ const formatTime = (s: number) =>
   `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
 // LAST TOUCH: roster persistence + per-player remove + timeout presets + court labels off
+// PENDING: verify uncommitted diff appears in GitHub Desktop / VS Code
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 const uid = () => Math.random().toString(36).slice(2);
