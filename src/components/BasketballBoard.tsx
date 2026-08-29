@@ -684,12 +684,12 @@ export const BasketballBoard: React.FC = () => {
 
   // ── INDEPENDENT SHOT CLOCK LOOP ──
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || timeoutMode) return;
     const t = setInterval(() => {
       setShotClock(p => (p <= 1 ? 0 : p - 1));
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, timerResetKey]);
+  }, [isRunning, timeoutMode, timerResetKey]);
 
   // Point scoring actions
   const addPoints = useCallback((team: 'home' | 'away', courtIndex: number, pts: number) => {
@@ -1218,22 +1218,32 @@ export const BasketballBoard: React.FC = () => {
                   <div className="w-3/4 border-t border-slate-700/50" />
 
                   <div className="text-center">
-                    <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">Shot Clock</span>
-                    <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${
-                      shotClock === 0 ? 'text-red-500 animate-bounce' : shotUrgent ? 'text-red-400 animate-pulse' : 'text-rose-400'
-                    }`}>
-                      {shotClock}
+                    <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">{timeoutMode ? 'Timeout Duration' : 'Shot Clock'}</span>
+                    <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${timeoutMode ? 'text-amber-400' : shotClock === 0 ? 'text-red-500 animate-bounce' : shotUrgent ? 'text-red-400 animate-pulse' : 'text-rose-400'}`}>
+                      {timeoutMode ? formatTime(gameTime) : shotClock}
                     </div>
                     {!isViewer && (
                       <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
-                        <button onClick={() => handleResetShotClock(24)}
-                          className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
-                          <RefreshCw size={9} />24s
-                        </button>
-                        <button onClick={() => handleResetShotClock(14)}
-                          className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
-                          <RefreshCw size={9} />14s
-                        </button>
+                        {timeoutMode ? (
+                          <>
+                            <button onClick={() => startTimeout(60)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">1m</button>
+                            <button onClick={() => startTimeout(30)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">30s</button>
+                            <button onClick={() => startTimeout(180)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">3m</button>
+                            <button onClick={() => startTimeout(300)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">5m</button>
+                            <button onClick={() => startTimeout(600)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">10m</button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => handleResetShotClock(24)}
+                              className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                              <RefreshCw size={9} />24s
+                            </button>
+                            <button onClick={() => handleResetShotClock(14)}
+                              className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                              <RefreshCw size={9} />14s
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
