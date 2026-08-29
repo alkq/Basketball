@@ -235,9 +235,35 @@ export const BasketballBoard: React.FC = () => {
   const [view, setView] = useState<'scoreboard' | 'court'>(initialView); 
 
   // Game States
-  const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
-  const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
-  const [poolPlayers, setPoolPlayers] = useState<Player[]>([]);
+  const loadRosterState = useCallback((): {home: Player[]; away: Player[]; pool: Player[]} => {
+    if (typeof window === 'undefined') {
+      return { home: createHomePlayers(), away: createAwayPlayers(), pool: [] };
+    }
+    try {
+      const raw = localStorage.getItem('basketball-roster-state');
+      if (!raw) return { home: createHomePlayers(), away: createAwayPlayers(), pool: [] };
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.homePlayers) && Array.isArray(data.awayPlayers) && Array.isArray(data.poolPlayers)) {
+        return { home: data.homePlayers, away: data.awayPlayers, pool: data.poolPlayers };
+      }
+    } catch {
+      // ignore corrupt storage
+    }
+    return { home: createHomePlayers(), away: createAwayPlayers(), pool: [] };
+  }, []);
+  const initialRosterState = loadRosterState();
+  const [homePlayers, setHomePlayers] = useState<Player[]>(initialRosterState.home);
+  const [awayPlayers, setAwayPlayers] = useState<Player[]>(initialRosterState.away);
+  const [poolPlayers, setPoolPlayers] = useState<Player[]>(initialRosterState.pool);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('basketball-roster-state', JSON.stringify({
+      homePlayers,
+      awayPlayers,
+      poolPlayers
+    }));
+  }, [homePlayers, awayPlayers, poolPlayers]);
   const [poolName, setPoolName] = useState('');
   const [poolNumber, setPoolNumber] = useState<number>(1);
   const [gameTime, setGameTime] = useState(600);
