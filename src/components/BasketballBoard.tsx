@@ -1966,9 +1966,6 @@ export const BasketballBoard: React.FC = () => {
                         } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''} ${selectedCourtId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
                           {player.number}
                         </div>
-                        <span className="text-[11px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] sm:max-w-[80px] truncate">
-                          {player.name}
-                        </span>
                       </div>
                     );
                   })}
