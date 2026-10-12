@@ -11,6 +11,16 @@ const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
+const getRoomId = () => {
+  if (typeof window === 'undefined') return 'default';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room') || 'default';
+  } catch {
+    return 'default';
+  }
+};
+
 type DisplayState = {
   homeScore: number;
   awayScore: number;
@@ -39,6 +49,8 @@ const DisplayBoard: React.FC = () => {
     awayName: 'AWAY'
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string>('OFFLINE');
+  const [roomId] = useState<string>(() => getRoomId());
 
   // ── REALTIME STATE RECEIVER (Listens to Tablet Controller over Internet) ── [2]
   useEffect(() => {
@@ -70,10 +82,11 @@ const DisplayBoard: React.FC = () => {
     };
 
     // Local BroadcastChannel (same-browser / tablet controller without Supabase)
+    // NOTE: BroadcastChannel only works same browser/device — cross-device needs Supabase below.
     let chan: BroadcastChannel | null = null;
     try {
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-        chan = new BroadcastChannel('basketball-display');
+        chan = new BroadcastChannel(`scoreboard-${roomId}`);
         chan.onmessage = (ev: MessageEvent) => {
           const d: any = ev.data;
           if (!d) return;
@@ -91,23 +104,32 @@ const DisplayBoard: React.FC = () => {
       }
     } catch { chan = null; }
 
-    if (!supabase) return () => { try { chan?.close(); } catch { /* ignore */ } };
+    if (!supabase) {
+      setSyncStatus('OFFLINE (no Supabase keys)');
+      return () => { try { chan?.close(); } catch { /* ignore */ } };
+    }
 
-    const channel = supabase.channel('basketball-sync', {
+    // MUST match controller: supabase.channel(`basketball-sync-${roomId}`)
+    setSyncStatus('CONNECTING...');
+    const channel = supabase.channel(`basketball-sync-${roomId}`, {
       config: { broadcast: { self: false } }
     });
 
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
+        setSyncStatus('LIVE');
         applyState(response.payload);
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setSyncStatus('LIVE — waiting for controller…');
+        else setSyncStatus(status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
       try { chan?.close(); } catch { /* ignore */ }
     };
-  }, []);
+  }, [roomId]);
 
   // Fullscreen event listener
   useEffect(() => {
@@ -130,8 +152,8 @@ const DisplayBoard: React.FC = () => {
       
       {/* Sync Status bar (mini & clean at the top) */}
       <div className="absolute top-4 flex items-center gap-2 text-slate-600 text-[10px] tracking-wider uppercase">
-        <span className={`w-1.5 h-1.5 rounded-full ${supabase ? 'bg-emerald-500/60' : 'bg-red-500/60'}`} />
-        <span>{supabase ? 'Vercel Realtime Active' : 'Offline Mode'}</span>
+        <span className={`w-1.5 h-1.5 rounded-full ${syncStatus.startsWith('LIVE') ? 'bg-emerald-500 animate-pulse' : syncStatus.startsWith('CONNECTING') ? 'bg-amber-500 animate-pulse' : 'bg-red-500/60'}`} />
+        <span>{supabase ? `${syncStatus} · room: ${roomId}` : `Offline Mode · room: ${roomId}`}</span>
       </div>
 
       <div className="w-full max-w-[95vw] h-[85vh] grid grid-cols-3 gap-8 md:gap-12 lg:gap-16 items-center">

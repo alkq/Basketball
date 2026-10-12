@@ -515,6 +515,7 @@ export const BasketballBoard: React.FC = () => {
   }, [homePlayers, awayPlayers, isViewer]);
 
   // ── LOCAL BROADCAST CHANNEL ──
+  // NOTE: BroadcastChannel only works same browser/device. Cross-device display uses Supabase below.
   useEffect(() => {
     try {
       bcRef.current = new BroadcastChannel(`scoreboard-${roomId}`);
@@ -524,7 +525,7 @@ export const BasketballBoard: React.FC = () => {
         if (ev.data.type === 'request') {
           chan.postMessage({ 
             type: 'init', 
-            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName } 
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls } 
           });
         }
       };
@@ -532,12 +533,12 @@ export const BasketballBoard: React.FC = () => {
     } catch (e) {
       bcRef.current = null;
     }
-  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName]);
+  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls]);
 
   useEffect(() => {
-    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName };
+    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls };
     try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
-  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName]);
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls]);
 
   // ── ESTABLISH REALTIME CONNECTION ──
   useEffect(() => {
