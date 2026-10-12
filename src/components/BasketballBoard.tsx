@@ -48,6 +48,45 @@ interface GameEvent {
 }
 
 // ==========================================
+// INLINE TEAM NAME EDITOR (HOME / AWAY)
+// ==========================================
+const TeamNameEditor: React.FC<{ name: string; onSave: (n: string) => void; className?: string; disabled?: boolean; inputClassName?: string }> = ({ name, onSave, className = '', disabled = false, inputClassName = '' }) => {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(name);
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (!editing) setVal(name); }, [name, editing]);
+  useEffect(() => { if (editing) { ref.current?.focus(); ref.current?.select(); } }, [editing]);
+
+  const save = () => {
+    const t = val.trim().slice(0, 20);
+    if (t && t !== name) onSave(t);
+    else setVal(name);
+    setEditing(false);
+  };
+
+  if (disabled) {
+    return <span className={className}>{name}</span>;
+  }
+
+  return editing ? (
+    <span className={`inline-flex items-center gap-1 ${className}`} onClick={(e) => e.stopPropagation()}>
+      <input ref={ref} value={val} onChange={e => setVal(e.target.value)} autoFocus
+        onBlur={save} onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setVal(name); setEditing(false); } }}
+        maxLength={20} placeholder="Team name"
+        className={`bg-slate-700 border border-amber-500 rounded px-2 py-0.5 text-sm text-white focus:outline-none w-28 text-center uppercase ${inputClassName}`} />
+      <button onClick={save} title="Save"><Check size={14} className="text-emerald-400" /></button>
+    </span>
+  ) : (
+    <span className={`cursor-pointer group/teamname inline-flex items-center gap-1 ${className}`}
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit team name">
+      {name}
+      <Edit3 size={13} className="opacity-40 group-hover/teamname:opacity-100 align-middle" />
+    </span>
+  );
+};
+
+// ==========================================
 // INLINE NAME EDITOR
 // ==========================================
 const InlineName: React.FC<{ name: string; onSave: (n: string) => void; className?: string; disabled?: boolean }> = ({ name, onSave, className = '', disabled = false }) => {
@@ -237,26 +276,35 @@ export const BasketballBoard: React.FC = () => {
   const [view, setView] = useState<'scoreboard' | 'court'>(initialView); 
 
   // Game States
-  const loadRosterState = useCallback((): {home: Player[]; away: Player[]; pool: Player[]} => {
+  const loadRosterState = useCallback((): {home: Player[]; away: Player[]; pool: Player[]; homeName: string; awayName: string} => {
+    const fallback = { home: createHomePlayers(), away: createAwayPlayers(), pool: [] as Player[], homeName: 'HOME', awayName: 'AWAY' };
     if (typeof window === 'undefined') {
-      return { home: createHomePlayers(), away: createAwayPlayers(), pool: [] };
+      return fallback;
     }
     try {
       const raw = localStorage.getItem('basketball-roster-state');
-      if (!raw) return { home: createHomePlayers(), away: createAwayPlayers(), pool: [] };
+      if (!raw) return fallback;
       const data = JSON.parse(raw);
       if (Array.isArray(data.homePlayers) && Array.isArray(data.awayPlayers) && Array.isArray(data.poolPlayers)) {
-        return { home: data.homePlayers, away: data.awayPlayers, pool: data.poolPlayers };
+        return {
+          home: data.homePlayers,
+          away: data.awayPlayers,
+          pool: data.poolPlayers,
+          homeName: typeof data.homeName === 'string' && data.homeName.trim() ? data.homeName : 'HOME',
+          awayName: typeof data.awayName === 'string' && data.awayName.trim() ? data.awayName : 'AWAY',
+        };
       }
     } catch {
       // ignore corrupt storage
     }
-    return { home: createHomePlayers(), away: createAwayPlayers(), pool: [] };
+    return fallback;
   }, []);
   const initialRosterState = loadRosterState();
   const [homePlayers, setHomePlayers] = useState<Player[]>(initialRosterState.home);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(initialRosterState.away);
   const [poolPlayers, setPoolPlayers] = useState<Player[]>(initialRosterState.pool);
+  const [homeName, setHomeName] = useState(initialRosterState.homeName);
+  const [awayName, setAwayName] = useState(initialRosterState.awayName);
 
   // Standalone tactical board tokens - independent from roster state
   const loadTacticalState = useCallback(() => {
@@ -296,9 +344,11 @@ export const BasketballBoard: React.FC = () => {
     localStorage.setItem('basketball-roster-state', JSON.stringify({
       homePlayers,
       awayPlayers,
-      poolPlayers
+      poolPlayers,
+      homeName,
+      awayName
     }));
-  }, [homePlayers, awayPlayers, poolPlayers]);
+  }, [homePlayers, awayPlayers, poolPlayers, homeName, awayName]);
   const [poolName, setPoolName] = useState('');
   const [poolNumber, setPoolNumber] = useState<number>(1);
   const [gameTime, setGameTime] = useState(600);
@@ -460,7 +510,7 @@ export const BasketballBoard: React.FC = () => {
         if (ev.data.type === 'request') {
           chan.postMessage({ 
             type: 'init', 
-            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers } 
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName } 
           });
         }
       };
@@ -468,12 +518,12 @@ export const BasketballBoard: React.FC = () => {
     } catch (e) {
       bcRef.current = null;
     }
-  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
+  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName]);
 
   useEffect(() => {
-    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls };
+    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName };
     try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
-  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls]);
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName]);
 
   // ── ESTABLISH REALTIME CONNECTION ──
   useEffect(() => {
@@ -510,6 +560,8 @@ export const BasketballBoard: React.FC = () => {
         
         if (data.drawings !== undefined) setDrawings(data.drawings);
         if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
+        if (typeof data.homeName === 'string' && data.homeName.trim()) setHomeName(data.homeName);
+        if (typeof data.awayName === 'string' && data.awayName.trim()) setAwayName(data.awayName);
       })
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
@@ -540,6 +592,8 @@ export const BasketballBoard: React.FC = () => {
       payload: {
         homePlayers,
         awayPlayers,
+        homeName,
+        awayName,
         gameTime,
         shotClock,
         isRunning,
@@ -551,7 +605,7 @@ export const BasketballBoard: React.FC = () => {
         currentDrawingPoints
       }
     });
-  }, [homePlayers, awayPlayers, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, roomId]);
+  }, [homePlayers, awayPlayers, homeName, awayName, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, roomId]);
 
   // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ──
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
@@ -848,8 +902,25 @@ export const BasketballBoard: React.FC = () => {
 
   const resetGame = useCallback(() => {
     if (isViewer) return;
-    setHomePlayers(createHomePlayers());
-    setAwayPlayers(createAwayPlayers());
+    // Return ONLY the currently-used roster players back to the pool (zeroed).
+    // Never resurrect defaults or previously-deleted players.
+    const returning: Player[] = [...homePlayers, ...awayPlayers].map(p => ({
+      ...p,
+      points: 0,
+      fouls: 0,
+      status: 'pool' as const,
+      x: 50,
+      y: 50,
+    }));
+    setPoolPlayers(prev => {
+      const seen = new Set(prev.map(p => p.id));
+      const fresh = returning.filter(p => !seen.has(p.id));
+      // also zero any existing pool entries so stale stats never linger
+      const cleanedPrev = prev.map(p => ({ ...p, points: 0, fouls: 0, status: 'pool' as const }));
+      return [...cleanedPrev, ...fresh];
+    });
+    setHomePlayers([]);
+    setAwayPlayers([]);
     setGameTime(600);
     setShotClock(24);
     setIsRunning(false);
@@ -864,7 +935,7 @@ export const BasketballBoard: React.FC = () => {
     setTimeoutMode(false);
     setTimeoutSavedGameTime(null);
     setTimeoutTimeoutRemaining(0);
-  }, [isViewer]);
+  }, [isViewer, homePlayers, awayPlayers]);
 
   const renamePlayer = useCallback((team: 'home' | 'away', id: string, name: string) => {
     if (isViewer) return;
@@ -1045,14 +1116,14 @@ export const BasketballBoard: React.FC = () => {
         try {
           bcRef.current?.postMessage({
             type: 'init',
-            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers }
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName }
           });
         } catch (e) {}
       }, 250);
     } catch (e) {
       // ignore
     }
-  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers]);
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
@@ -1217,7 +1288,8 @@ export const BasketballBoard: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-3 sm:py-5 border-r border-slate-700/40 bg-gradient-to-b from-orange-950/30 to-transparent">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Trophy size={16} className="text-amber-500/80" />
-                    <h2 className="text-amber-400 text-base md:text-lg font-bold tracking-wider uppercase">Home</h2>
+                    <TeamNameEditor name={homeName} onSave={(n) => setHomeName(n)} disabled={isViewer}
+                      className="text-amber-400 text-base md:text-lg font-bold tracking-wider uppercase" />
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full opacity-50" />
@@ -1346,7 +1418,8 @@ export const BasketballBoard: React.FC = () => {
                 <div className="flex flex-col items-center justify-center py-5 md:py-7 border-l border-slate-700/40 bg-gradient-to-b from-blue-950/30 to-transparent">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Trophy size={16} className="text-sky-500/80" />
-                    <h2 className="text-sky-400 text-base md:text-lg font-bold tracking-wider uppercase">Away</h2>
+                    <TeamNameEditor name={awayName} onSave={(n) => setAwayName(n)} disabled={isViewer}
+                      className="text-sky-400 text-base md:text-lg font-bold tracking-wider uppercase" />
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-sky-500/20 blur-2xl rounded-full opacity-50" />
@@ -1431,7 +1504,7 @@ export const BasketballBoard: React.FC = () => {
                           ✕
                         </button>
                         <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 font-bold text-[10px] bg-slate-700/60 mb-0.5">
-                          <InlineNumber num={player.number} className="text-[11px]" compact disabled />
+                          <InlineNumber num={player.number} onSave={() => {}} className="text-[11px]" compact disabled />
                         </div>
                         <div className="text-[10px] text-slate-400 truncate max-w-[54px] leading-tight">{player.name}</div>
                         <div className="flex gap-1 mt-1">
@@ -1447,7 +1520,7 @@ export const BasketballBoard: React.FC = () => {
 
             {/* Roster Panels */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <RosterPanel team="home" players={homePlayers}
+              <RosterPanel team="home" teamName={homeName} players={homePlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
                 onChangeNumber={changePlayerNumber}
@@ -1467,7 +1540,7 @@ export const BasketballBoard: React.FC = () => {
                 onUndoLast={undoLast}
                 gameEvents={gameEvents}
                 onRemovePlayer={removePlayer} />
-              <RosterPanel team="away" players={awayPlayers}
+              <RosterPanel team="away" teamName={awayName} players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
                 onChangeNumber={changePlayerNumber}
@@ -1496,13 +1569,13 @@ export const BasketballBoard: React.FC = () => {
                 <p className="text-center text-[10px] text-slate-500 mt-0.5">{new Date().toLocaleDateString()}</p>
                 <div className="flex items-center justify-center gap-4 mt-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Home</span>
+                    <span className="text-xs text-slate-400 uppercase tracking-wider">{homeName}</span>
                     <span className="text-2xl font-black text-orange-400 tabular-nums">{homeScore}</span>
                   </div>
                   <span className="text-slate-600 font-bold text-sm">VS</span>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-black text-sky-400 tabular-nums">{awayScore}</span>
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Away</span>
+                    <span className="text-xs text-slate-400 uppercase tracking-wider">{awayName}</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-center mt-2">
@@ -1519,9 +1592,9 @@ export const BasketballBoard: React.FC = () => {
                   <table className="mx-auto w-full text-sm border-collapse">
                     <thead>
                       <tr>
-                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Home</th>
+                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">{homeName}</th>
                         <th className="bg-slate-700/60 text-slate-300 border border-slate-600 px-3 py-1.5 font-bold w-14 text-center">Score</th>
-                        <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">Away</th>
+                        <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">{awayName}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1603,7 +1676,7 @@ export const BasketballBoard: React.FC = () => {
                       {[...gameEvents].reverse().map(ev => (
                         <div key={ev.id} className="flex items-center gap-3 text-[11px] py-1 border-b border-slate-700/30">
                           <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
-                            {ev.team === 'home' ? 'HOME' : 'AWAY'}
+                            {(ev.team === 'home' ? homeName : awayName).toUpperCase()}
                           </span>
                           <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
                           <span className={ev.type === 'score' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
@@ -1648,7 +1721,7 @@ export const BasketballBoard: React.FC = () => {
               
               {/* Home Team Mini Score */}
               <div className="flex items-center gap-1.5 sm:gap-3 justify-start pl-1 sm:pl-4">
-                <span className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">Home</span>
+                <span className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">{homeName}</span>
                 <span className="text-xl sm:text-3xl font-black text-orange-500">{homeScore}</span>
                 <span className="text-[10px] sm:text-sm text-slate-400 truncate">
                   (F: <span className="font-extrabold text-sm sm:text-xl text-amber-500">{homeFouls}</span>)
@@ -1675,7 +1748,7 @@ export const BasketballBoard: React.FC = () => {
                   (F: <span className="font-extrabold text-sm sm:text-xl text-sky-400">{awayFouls}</span>)
                 </span>
                 <span className="text-xl sm:text-3xl font-black text-blue-500">{awayScore}</span>
-                <span className="text-xs sm:text-sm font-bold text-sky-400 uppercase tracking-wider">Away</span>
+                <span className="text-xs sm:text-sm font-bold text-sky-400 uppercase tracking-wider">{awayName}</span>
               </div>
             </div>
 
@@ -2049,6 +2122,7 @@ export const BasketballBoard: React.FC = () => {
 // ==========================================
 const RosterPanel: React.FC<{
   team: 'home' | 'away';
+  teamName: string;
   players: Player[];
   onAddPoints: (team: 'home' | 'away', index: number, pts: number) => void;
   onAddFoul: (team: 'home' | 'away', index: number, delta: number) => void;
@@ -2072,7 +2146,7 @@ const RosterPanel: React.FC<{
   gameEvents?: GameEvent[];
   onRemovePlayer?: (team: 'home' | 'away', id: string) => void;
 }> = ({ 
-  team, players, onAddPoints, onAddFoul, onRename, 
+  team, teamName, players, onAddPoints, onAddFoul, onRename, 
   onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
   selectedCourtId, onSelectCourt, onBenchClick,
@@ -2095,14 +2169,14 @@ const RosterPanel: React.FC<{
 
   const isDropTarget = (id: string) => dropTargetId === id && draggedId !== null && draggedId !== id;
   const isDragging = (id: string) => draggedId === id;
-  const lastTeamEvent = (team: 'home' | 'away') => [...gameEvents].reverse().find(ev => ev.team === team);
+  const lastTeamEvent = (team: 'home' | 'away') => [...(gameEvents ?? [])].reverse().find(ev => ev.team === team);
 
   return (
     <div className={`rounded-2xl border-2 ${borderColor} bg-slate-800/30 shadow-xl overflow-hidden`}>
       <div className={`${headerBg} px-4 py-2.5 border-b ${borderColor} flex items-center justify-between`}>
         <div className="flex items-center gap-2">
           <UserCheck size={15} className={accentText} />
-          <h3 className={`text-base font-bold ${accentText}`}>{isHome ? 'Home' : 'Away'} Roster</h3>
+          <h3 className={`text-base font-bold ${accentText} uppercase`}>{teamName} Roster</h3>
         </div>
         <div className="flex items-center gap-2 text-[10px] text-slate-500">
           <span>Court: {courtPlayers.length}</span>
@@ -2128,7 +2202,7 @@ const RosterPanel: React.FC<{
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
           <div
             onDragOver={e => e.preventDefault()}
-            onDrop={e => onCourtGridDrop(e)}
+            onDrop={e => onCourtGridDrop?.(e)}
             onDragLeave={onDragLeave}
             className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {Array.from({ length: 5 }).map((_, idx) => {
@@ -2199,7 +2273,7 @@ const RosterPanel: React.FC<{
               return (
                 <div key={`empty-court-${idx}`}
                   onDragOver={e => e.preventDefault()}
-                  onDrop={e => onEmptyCourtDrop(e)}
+                  onDrop={e => onEmptyCourtDrop?.(e)}
                   onDragLeave={onDragLeave}
                   className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3 min-h-[100px] flex items-center justify-center">
                   <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Drop here</div>
@@ -2213,7 +2287,7 @@ const RosterPanel: React.FC<{
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
           <div
             onDragOver={e => e.preventDefault()}
-            onDrop={e => onEmptyBenchDrop(e)}
+            onDrop={e => onEmptyBenchDrop?.(e)}
             onDragLeave={onDragLeave}
             className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
             {Array.from({ length: Math.max(benchPlayers.length + 3, 6) }).map((_, idx) => {
@@ -2245,7 +2319,7 @@ const RosterPanel: React.FC<{
               return (
                 <div key={`empty-bench-${idx}`}
                   onDragOver={e => e.preventDefault()}
-                  onDrop={e => onEmptyBenchDrop(e)}
+                  onDrop={e => onEmptyBenchDrop?.(e)}
                   onDragLeave={onDragLeave}
                   className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3 min-h-[80px] flex items-center justify-center">
                   <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Drop here</div>

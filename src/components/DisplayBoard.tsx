@@ -19,6 +19,8 @@ type DisplayState = {
   shotClock: number;
   homeFouls: number;
   awayFouls: number;
+  homeName: string;
+  awayName: string;
 };
 
 const formatTime = (s: number) => 
@@ -32,13 +34,59 @@ const DisplayBoard: React.FC = () => {
     gameTime: 600, 
     shotClock: 24, 
     homeFouls: 0, 
-    awayFouls: 0 
+    awayFouls: 0,
+    homeName: 'HOME',
+    awayName: 'AWAY'
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // ── REALTIME STATE RECEIVER (Listens to Tablet Controller over Internet) ── [2]
   useEffect(() => {
-    if (!supabase) return;
+    const applyState = (s: any) => {
+      if (!s) return;
+
+      // Calculate home/away scores and fouls dynamically from the synced player data
+      const hs = s.homePlayers ? s.homePlayers.reduce((sum: number, p: any) => sum + p.points, 0) : (s.homeScore ?? 0);
+      const as = s.awayPlayers ? s.awayPlayers.reduce((sum: number, p: any) => sum + p.points, 0) : (s.awayScore ?? 0);
+      const hFouls = s.homePlayers ? s.homePlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : (s.homeFouls ?? 0);
+      const aFouls = s.awayPlayers ? s.awayPlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : (s.awayFouls ?? 0);
+
+      setState((prev) => ({
+        homeScore: hs,
+        awayScore: as,
+        period: s.period ?? prev.period,
+        gameTime: s.gameTime ?? prev.gameTime,
+        shotClock: s.shotClock ?? prev.shotClock,
+        homeFouls: hFouls,
+        awayFouls: aFouls,
+        homeName: typeof s.homeName === 'string' && s.homeName.trim() ? s.homeName : prev.homeName,
+        awayName: typeof s.awayName === 'string' && s.awayName.trim() ? s.awayName : prev.awayName,
+      }));
+    };
+
+    // Local BroadcastChannel (same-browser / tablet controller without Supabase)
+    let chan: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        chan = new BroadcastChannel('basketball-display');
+        chan.onmessage = (ev: MessageEvent) => {
+          const d: any = ev.data;
+          if (!d) return;
+          if (d.type === 'init' || d.type === 'update' || d.type === 'state') applyState(d.state);
+        };
+        chan.postMessage({ type: 'request' });
+        // Also pick up persisted roster names immediately (offline open)
+        try {
+          const raw = localStorage.getItem('basketball-roster-state');
+          if (raw) {
+            const data = JSON.parse(raw);
+            applyState({ homeName: data.homeName, awayName: data.awayName });
+          }
+        } catch { /* ignore */ }
+      }
+    } catch { chan = null; }
+
+    if (!supabase) return () => { try { chan?.close(); } catch { /* ignore */ } };
 
     const channel = supabase.channel('basketball-sync', {
       config: { broadcast: { self: false } }
@@ -46,29 +94,13 @@ const DisplayBoard: React.FC = () => {
 
     channel
       .on('broadcast', { event: 'state-update' }, (response: any) => {
-        const s = response.payload;
-        if (!s) return;
-
-        // Calculate home/away scores and fouls dynamically from the synced player data
-        const hs = s.homePlayers ? s.homePlayers.reduce((sum: number, p: any) => sum + p.points, 0) : 0;
-        const as = s.awayPlayers ? s.awayPlayers.reduce((sum: number, p: any) => sum + p.points, 0) : 0;
-        const hFouls = s.homePlayers ? s.homePlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : 0;
-        const aFouls = s.awayPlayers ? s.awayPlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : 0;
-
-        setState({
-          homeScore: hs,
-          awayScore: as,
-          period: s.period ?? 1,
-          gameTime: s.gameTime ?? 600,
-          shotClock: s.shotClock ?? 24,
-          homeFouls: hFouls,
-          awayFouls: aFouls
-        });
+        applyState(response.payload);
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+      try { chan?.close(); } catch { /* ignore */ }
     };
   }, []);
 
@@ -102,7 +134,7 @@ const DisplayBoard: React.FC = () => {
         {/* HOME TEAM COLUMN */}
         <div className="flex flex-col items-center justify-center space-y-4">
           <div className="text-orange-400 uppercase text-2xl md:text-4xl lg:text-5xl font-black tracking-widest text-center">
-            Home
+            {state.homeName}
           </div>
           <div className="relative">
             {/* LED Ambient Glow */}
@@ -163,7 +195,7 @@ const DisplayBoard: React.FC = () => {
         {/* AWAY TEAM COLUMN */}
         <div className="flex flex-col items-center justify-center space-y-4">
           <div className="text-sky-400 uppercase text-2xl md:text-4xl lg:text-5xl font-black tracking-widest text-center">
-            Away
+            {state.awayName}
           </div>
           <div className="relative">
             {/* LED Ambient Glow */}
