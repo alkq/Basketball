@@ -313,38 +313,45 @@ export const BasketballBoard: React.FC = () => {
   const [homeName, setHomeName] = useState(initialRosterState.homeName);
   const [awayName, setAwayName] = useState(initialRosterState.awayName);
 
-  // Standalone tactical board tokens - independent from roster state
-  const loadTacticalState = useCallback(() => {
-    if (typeof window === 'undefined') return [];
+  // Standalone tactical board tokens + ball - independent from roster state
+  interface TacticToken { id: string; team: 'home' | 'away'; number: number; x: number; y: number; }
+  const DEFAULT_TACTIC_TOKENS: TacticToken[] = [
+    { id: 'h1', team: 'home' as const, number: 1, x: 27.5, y: 30 },
+    { id: 'h2', team: 'home' as const, number: 2, x: 22, y: 22 },
+    { id: 'h3', team: 'home' as const, number: 3, x: 33, y: 22 },
+    { id: 'h4', team: 'home' as const, number: 4, x: 18, y: 45 },
+    { id: 'h5', team: 'home' as const, number: 5, x: 37, y: 45 },
+    { id: 'a1', team: 'away' as const, number: 1, x: 72.5, y: 70 },
+    { id: 'a2', team: 'away' as const, number: 2, x: 67, y: 78 },
+    { id: 'a3', team: 'away' as const, number: 3, x: 78, y: 78 },
+    { id: 'a4', team: 'away' as const, number: 4, x: 63, y: 55 },
+    { id: 'a5', team: 'away' as const, number: 5, x: 82, y: 55 },
+  ];
+  const DEFAULT_BALL_POS = { x: 50, y: 50 };
+  const loadTacticalState = useCallback((): { tokens: TacticToken[]; ball: { x: number; y: number } } => {
+    if (typeof window === 'undefined') return { tokens: DEFAULT_TACTIC_TOKENS, ball: DEFAULT_BALL_POS };
     try {
       const raw = localStorage.getItem('basketball-tactics');
       if (!raw) {
-        // Default 5v5 tokens
-        return [
-          { id: 'h1', team: 'home' as const, number: 1, x: 27.5, y: 30 },
-          { id: 'h2', team: 'home' as const, number: 2, x: 22, y: 22 },
-          { id: 'h3', team: 'home' as const, number: 3, x: 33, y: 22 },
-          { id: 'h4', team: 'home' as const, number: 4, x: 18, y: 45 },
-          { id: 'h5', team: 'home' as const, number: 5, x: 37, y: 45 },
-          { id: 'a1', team: 'away' as const, number: 1, x: 72.5, y: 70 },
-          { id: 'a2', team: 'away' as const, number: 2, x: 67, y: 78 },
-          { id: 'a3', team: 'away' as const, number: 3, x: 78, y: 78 },
-          { id: 'a4', team: 'away' as const, number: 4, x: 63, y: 55 },
-          { id: 'a5', team: 'away' as const, number: 5, x: 82, y: 55 },
-        ];
+        // Default 5v5 tokens + center ball
+        return { tokens: DEFAULT_TACTIC_TOKENS, ball: DEFAULT_BALL_POS };
       }
       const data = JSON.parse(raw);
-      if (Array.isArray(data.tokens)) return data.tokens;
+      const tokens = Array.isArray(data.tokens) ? data.tokens : (Array.isArray(data) ? data : DEFAULT_TACTIC_TOKENS);
+      const ball = data.ball && typeof data.ball.x === 'number' && typeof data.ball.y === 'number'
+        ? { x: data.ball.x, y: data.ball.y } : { ...DEFAULT_BALL_POS };
+      return { tokens, ball };
     } catch { /* ignore */ }
-    return [];
+    return { tokens: DEFAULT_TACTIC_TOKENS, ball: DEFAULT_BALL_POS };
   }, []);
   const initialTacticalTokens = loadTacticalState();
-  const [tacticTokens, setTacticTokens] = useState<{id: string; team: 'home' | 'away'; number: number; x: number; y: number}[]>(initialTacticalTokens);
+  const [tacticTokens, setTacticTokens] = useState<TacticToken[]>(initialTacticalTokens.tokens);
+  const [ballPos, setBallPos] = useState<{ x: number; y: number }>(initialTacticalTokens.ball);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('basketball-tactics', JSON.stringify({ tokens: tacticTokens }));
-  }, [tacticTokens]);
+    localStorage.setItem('basketball-tactics', JSON.stringify({ tokens: tacticTokens, ball: ballPos }));
+  }, [tacticTokens, ballPos]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -525,7 +532,7 @@ export const BasketballBoard: React.FC = () => {
         if (ev.data.type === 'request') {
           chan.postMessage({ 
             type: 'init', 
-            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls } 
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos } 
           });
         }
       };
@@ -533,12 +540,12 @@ export const BasketballBoard: React.FC = () => {
     } catch (e) {
       bcRef.current = null;
     }
-  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls]);
+  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos]);
 
   useEffect(() => {
-    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls };
+    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos };
     try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
-  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls]);
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos]);
 
   // ── ESTABLISH REALTIME CONNECTION ──
   useEffect(() => {
@@ -575,6 +582,8 @@ export const BasketballBoard: React.FC = () => {
         
         if (data.drawings !== undefined) setDrawings(data.drawings);
         if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
+        if (Array.isArray(data.tacticTokens)) setTacticTokens(data.tacticTokens);
+        if (data.ballPos && typeof data.ballPos.x === 'number' && typeof data.ballPos.y === 'number') setBallPos(data.ballPos);
         if (typeof data.homeName === 'string' && data.homeName.trim()) setHomeName(data.homeName);
         if (typeof data.awayName === 'string' && data.awayName.trim()) setAwayName(data.awayName);
         if (typeof data.homeManualScore === 'number') setHomeManualScore(data.homeManualScore);
@@ -625,15 +634,18 @@ export const BasketballBoard: React.FC = () => {
         view,
         clockMode,
         drawings,
-        currentDrawingPoints
+        currentDrawingPoints,
+        tacticTokens,
+        ballPos
       }
     });
-  }, [homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, roomId]);
+  }, [homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, tacticTokens, ballPos, roomId]);
 
   // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ──
+  // Also handles the ball token (playerId === 'ball').
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
     if (isViewer) return;
-    
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -643,13 +655,17 @@ export const BasketballBoard: React.FC = () => {
     const startX = ((e.clientX - rect.left) / rect.width) * 100;
     const startY = ((e.clientY - rect.top) / rect.height) * 100;
 
-    const p = tacticTokens.find(pl => pl.id === playerId);
-    if (!p) return;
+    let projected: { x: number; y: number } | null = null;
+    if (playerId === 'ball') {
+      projected = isVerticalView ? { x: ballPos.y, y: ballPos.x } : { x: ballPos.x, y: ballPos.y };
+    } else {
+      const p = tacticTokens.find(pl => pl.id === playerId);
+      if (!p) return;
+      // Get position in current visual perspective (vertical or horizontal)
+      projected = isVerticalView ? { x: p.y, y: p.x } : { x: p.x, y: p.y };
+    }
 
     e.currentTarget.setPointerCapture(e.pointerId);
-
-    // Get position in current visual perspective (vertical or horizontal)
-    const projected = isVerticalView ? { x: p.y, y: p.x } : { x: p.x, y: p.y };
 
     activeDragsRef.current[e.pointerId] = {
       playerId,
@@ -658,7 +674,7 @@ export const BasketballBoard: React.FC = () => {
       playerStartX: projected.x,
       playerStartY: projected.y
     };
-    
+
     setCourtDragId(playerId);
   };
 
@@ -685,6 +701,11 @@ export const BasketballBoard: React.FC = () => {
     if (isVerticalView) {
       updatedX = visualY;
       updatedY = visualX;
+    }
+
+    if (playerId === 'ball') {
+      setBallPos({ x: updatedX, y: updatedY });
+      return;
     }
 
     setTacticTokens(prev => prev.map(t => t.id === playerId ? { ...t, x: updatedX, y: updatedY } : t));
@@ -797,7 +818,11 @@ export const BasketballBoard: React.FC = () => {
   };
 
   // ── INDEPENDENT GAME CLOCK LOOP ──
+  // Controller owns the clock. Viewer NEVER ticks locally — it only mirrors
+  // gameTime/shotClock/isRunning broadcast from the controller. Otherwise the
+  // viewer double-ticks and fights incoming sync (glitching/jumping clock).
   useEffect(() => {
+    if (isViewer) return;
     if (!isRunning || timeoutMode) return;
     const t = setInterval(() => {
       setGameTime(p => {
@@ -809,10 +834,11 @@ export const BasketballBoard: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, clockMode, timeoutMode]);
+  }, [isViewer, isRunning, clockMode, timeoutMode]);
 
   // ── TIMEOUT DURATION LOOP ──
   useEffect(() => {
+    if (isViewer) return;
     if (!isRunning || !timeoutMode) return;
     const t = setInterval(() => {
       setTimeoutTimeoutRemaining(p => {
@@ -826,16 +852,17 @@ export const BasketballBoard: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, timeoutMode]);
+  }, [isViewer, isRunning, timeoutMode]);
 
   // ── INDEPENDENT SHOT CLOCK LOOP ──
   useEffect(() => {
+    if (isViewer) return;
     if (!isRunning || timeoutMode) return;
     const t = setInterval(() => {
       setShotClock(p => (p <= 1 ? 0 : p - 1));
     }, 1000);
     return () => clearInterval(t);
-  }, [isRunning, timeoutMode, timerResetKey]);
+  }, [isViewer, isRunning, timeoutMode, timerResetKey]);
 
   // Team manual quick-score: changes team total, NOT any player's personal score/fouls.
   const adjustTeamScore = useCallback((team: 'home' | 'away', delta: number) => {
@@ -1185,7 +1212,7 @@ export const BasketballBoard: React.FC = () => {
         try {
           bcRef.current?.postMessage({
             type: 'init',
-            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName }
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos }
           });
         } catch (e) {}
       }, 250);
@@ -1870,6 +1897,19 @@ export const BasketballBoard: React.FC = () => {
                     <Trash2 size={15} />
                   </button>
 
+                  <div className="border-l h-6 mx-1 border-slate-700/50" />
+
+                  <button
+                    onClick={() => {
+                      setTacticTokens([...DEFAULT_TACTIC_TOKENS]);
+                      setBallPos({ ...DEFAULT_BALL_POS });
+                    }}
+                    title="Reset court positions (players + ball)"
+                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-amber-400 transition-colors flex items-center gap-1 text-xs font-bold"
+                  >
+                    <RotateCcw size={15} /> Reset court
+                  </button>
+
                   {activeTool === 'draw' && (
                     <>
                       <div className="border-l h-6 mx-1 border-slate-700/50" />
@@ -2141,7 +2181,7 @@ export const BasketballBoard: React.FC = () => {
                         style={{ 
                           left: `${pos.x}%`, 
                           top: `${pos.y}%`, 
-                          transition: courtDragId === token.id ? 'none' : 'transform 0.1s',
+                          transition: courtDragId === token.id ? 'none' : 'left 0.12s linear, top 0.12s linear',
                           pointerEvents: activeTool === 'move' ? 'auto' : 'none'
                         }}>
                         <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
@@ -2152,6 +2192,33 @@ export const BasketballBoard: React.FC = () => {
                       </div>
                     );
                   })}
+
+                  {/* DRAGGABLE BALL — syncs live to viewer like player tokens */}
+                  {(() => {
+                    const bpos = isVerticalView ? { x: ballPos.y, y: ballPos.x } : { x: ballPos.x, y: ballPos.y };
+                    return (
+                      <div
+                        onPointerDown={e => handleCourtPointerDown(e, 'ball')}
+                        onPointerMove={e => handleCourtPointerMove(e, 'ball')}
+                        onPointerUp={e => handleCourtPointerUp(e, 'ball')}
+                        onPointerCancel={e => handleCourtPointerCancel(e, 'ball')}
+                        title="Ball (drag to move)"
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === 'ball' ? 'z-20 scale-125' : ''}`}
+                        style={{
+                          left: `${bpos.x}%`,
+                          top: `${bpos.y}%`,
+                          transition: courtDragId === 'ball' ? 'none' : 'left 0.12s linear, top 0.12s linear',
+                          pointerEvents: activeTool === 'move' ? 'auto' : 'none'
+                        }}>
+                        <div className={`relative w-6 h-6 sm:w-7 sm:h-7 rounded-full shadow-lg border border-black/40 bg-[radial-gradient(circle_at_30%_30%,#fbbf24,#d97706_55%,#92400e)] ${courtDragId === 'ball' ? 'ring-2 ring-yellow-300' : ''}`}>
+                          {/* seams */}
+                          <span className="absolute left-1/2 top-[8%] bottom-[8%] w-[1.5px] -translate-x-1/2 bg-black/60 rounded" />
+                          <span className="absolute top-1/2 left-[8%] right-[8%] h-[1.5px] -translate-y-1/2 bg-black/60 rounded" />
+                          <span className="absolute inset-[3px] rounded-full border border-black/50" style={{ clipPath: 'polygon(0 62%, 100% 38%, 100% 46%, 0 70%)' }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                 </div>
               </div>
