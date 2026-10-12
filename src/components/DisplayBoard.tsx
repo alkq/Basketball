@@ -45,11 +45,16 @@ const DisplayBoard: React.FC = () => {
     const applyState = (s: any) => {
       if (!s) return;
 
-      // Calculate home/away scores and fouls dynamically from the synced player data
-      const hs = s.homePlayers ? s.homePlayers.reduce((sum: number, p: any) => sum + p.points, 0) : (s.homeScore ?? 0);
-      const as = s.awayPlayers ? s.awayPlayers.reduce((sum: number, p: any) => sum + p.points, 0) : (s.awayScore ?? 0);
-      const hFouls = s.homePlayers ? s.homePlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : (s.homeFouls ?? 0);
-      const aFouls = s.awayPlayers ? s.awayPlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + p.fouls, 0) : (s.awayFouls ?? 0);
+      // Team totals = player points + manual team adjustments (quick buttons).
+      // Prefer explicit totals when sent; otherwise derive from players + manual parts.
+      const playerHome = s.homePlayers ? s.homePlayers.reduce((sum: number, p: any) => sum + (p.points || 0), 0) : null;
+      const playerAway = s.awayPlayers ? s.awayPlayers.reduce((sum: number, p: any) => sum + (p.points || 0), 0) : null;
+      const courtHomeFouls = s.homePlayers ? s.homePlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + (p.fouls || 0), 0) : null;
+      const courtAwayFouls = s.awayPlayers ? s.awayPlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + (p.fouls || 0), 0) : null;
+      const hs = typeof s.homeScore === 'number' ? s.homeScore : (playerHome ?? 0) + (s.homeManualScore ?? 0);
+      const as = typeof s.awayScore === 'number' ? s.awayScore : (playerAway ?? 0) + (s.awayManualScore ?? 0);
+      const hFouls = typeof s.homeFouls === 'number' && !s.homePlayers ? s.homeFouls : (courtHomeFouls ?? 0) + (s.homeManualFouls ?? 0);
+      const aFouls = typeof s.awayFouls === 'number' && !s.awayPlayers ? s.awayFouls : (courtAwayFouls ?? 0) + (s.awayManualFouls ?? 0);
 
       setState((prev) => ({
         homeScore: hs,

@@ -270,6 +270,13 @@ export const BasketballBoard: React.FC = () => {
   const [trainingHomeFouls, setTrainingHomeFouls] = useState(0);
   const [trainingAwayFouls, setTrainingAwayFouls] = useState(0);
   const [trainingUndo, setTrainingUndo] = useState<Array<{ team: 'home' | 'away'; type: 'score' | 'foul'; delta: number }>>([]);
+  // Team manual adjustments (quick buttons under the big total).
+  // These add to the team total WITHOUT touching any player's personal points/fouls.
+  const [homeManualScore, setHomeManualScore] = useState(0);
+  const [awayManualScore, setAwayManualScore] = useState(0);
+  const [homeManualFouls, setHomeManualFouls] = useState(0);
+  const [awayManualFouls, setAwayManualFouls] = useState(0);
+  const [manualUndo, setManualUndo] = useState<Array<{ team: 'home' | 'away'; type: 'score' | 'foul'; delta: number }>>([]);
 
   // UI View States
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
@@ -436,10 +443,17 @@ export const BasketballBoard: React.FC = () => {
   const isVerticalView = isMobileDevice && isPortrait;
 
   // ── DERIVED VALUES ──
-  const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
-  const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
-  const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
-  const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+  // Team totals = player points + manual team adjustments (quick buttons).
+  // Player-card +1/+2/+3/+F keep feeding player points (and thus the total).
+  // Quick -1/+1/+2/+3/F under the big score only touch the manual part.
+  const homePlayerScore = homePlayers.reduce((s, p) => s + p.points, 0);
+  const awayPlayerScore = awayPlayers.reduce((s, p) => s + p.points, 0);
+  const homeScore = homePlayerScore + homeManualScore;
+  const awayScore = awayPlayerScore + awayManualScore;
+  const homePlayerFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+  const awayPlayerFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+  const homeFouls = homePlayerFouls + homeManualFouls;
+  const awayFouls = awayPlayerFouls + awayManualFouls;
 
   const scoresheetMap = useMemo(() => {
     const home: Record<number, { playerNumber: number; playerName: string }> = {};
@@ -562,6 +576,10 @@ export const BasketballBoard: React.FC = () => {
         if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
         if (typeof data.homeName === 'string' && data.homeName.trim()) setHomeName(data.homeName);
         if (typeof data.awayName === 'string' && data.awayName.trim()) setAwayName(data.awayName);
+        if (typeof data.homeManualScore === 'number') setHomeManualScore(data.homeManualScore);
+        if (typeof data.awayManualScore === 'number') setAwayManualScore(data.awayManualScore);
+        if (typeof data.homeManualFouls === 'number') setHomeManualFouls(data.homeManualFouls);
+        if (typeof data.awayManualFouls === 'number') setAwayManualFouls(data.awayManualFouls);
       })
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
@@ -594,6 +612,10 @@ export const BasketballBoard: React.FC = () => {
         awayPlayers,
         homeName,
         awayName,
+        homeManualScore,
+        awayManualScore,
+        homeManualFouls,
+        awayManualFouls,
         gameTime,
         shotClock,
         isRunning,
@@ -605,7 +627,7 @@ export const BasketballBoard: React.FC = () => {
         currentDrawingPoints
       }
     });
-  }, [homePlayers, awayPlayers, homeName, awayName, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, roomId]);
+  }, [homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, roomId]);
 
   // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ──
   const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
@@ -814,6 +836,47 @@ export const BasketballBoard: React.FC = () => {
     return () => clearInterval(t);
   }, [isRunning, timeoutMode, timerResetKey]);
 
+  // Team manual quick-score: changes team total, NOT any player's personal score/fouls.
+  const adjustTeamScore = useCallback((team: 'home' | 'away', delta: number) => {
+    if (isViewer) return;
+    if (team === 'home') {
+      setHomeManualScore(s => Math.max(-homePlayerScore, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'score', delta }]);
+    } else {
+      setAwayManualScore(s => Math.max(-awayPlayerScore, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'score', delta }]);
+    }
+  }, [isViewer, homePlayerScore, awayPlayerScore]);
+
+  const adjustTeamFoul = useCallback((team: 'home' | 'away', delta: number) => {
+    if (isViewer) return;
+    if (team === 'home') {
+      setHomeManualFouls(s => Math.max(0, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'foul', delta }]);
+    } else {
+      setAwayManualFouls(s => Math.max(0, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'foul', delta }]);
+    }
+  }, [isViewer]);
+
+  const undoTeamManual = useCallback((team: 'home' | 'away') => {
+    if (isViewer) return;
+    setManualUndo(prev => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (!last || last.team !== team) return prev;
+      next.pop();
+      if (last.type === 'score') {
+        if (team === 'home') setHomeManualScore(s => Math.max(-homePlayerScore, s - last.delta));
+        else setAwayManualScore(s => Math.max(-awayPlayerScore, s - last.delta));
+      } else {
+        if (team === 'home') setHomeManualFouls(s => Math.max(0, s - last.delta));
+        else setAwayManualFouls(s => Math.max(0, s - last.delta));
+      }
+      return next;
+    });
+  }, [isViewer, homePlayerScore, awayPlayerScore]);
+
   // Point scoring actions
   const addPoints = useCallback((team: 'home' | 'away', courtIndex: number, pts: number) => {
     if (isViewer) return;
@@ -932,6 +995,11 @@ export const BasketballBoard: React.FC = () => {
     setTrainingHomeFouls(0);
     setTrainingAwayFouls(0);
     setTrainingUndo([]);
+    setHomeManualScore(0);
+    setAwayManualScore(0);
+    setHomeManualFouls(0);
+    setAwayManualFouls(0);
+    setManualUndo([]);
     setTimeoutMode(false);
     setTimeoutSavedGameTime(null);
     setTimeoutTimeoutRemaining(0);
@@ -1299,25 +1367,15 @@ export const BasketballBoard: React.FC = () => {
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-sm sm:text-base text-slate-400">
                     <span className="text-sm sm:text-base">Fouls:</span>
-                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${homePlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0) >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homePlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0)}</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
                   </div>
                   {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
-                      <button onClick={() => setTrainingHomeScore(Math.max(0, trainingHomeScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
-                      <button onClick={() => { setTrainingHomeScore(s => s + 1); setTrainingUndo(prev => [...prev, {team:'home',type:'score',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
-                      <button onClick={() => { setTrainingHomeScore(s => s + 2); setTrainingUndo(prev => [...prev, {team:'home',type:'score',delta:2}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
-                      <button onClick={() => { setTrainingHomeScore(s => s + 3); setTrainingUndo(prev => [...prev, {team:'home',type:'score',delta:3}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
-                      <button onClick={() => { setTrainingHomeFouls(s => s + 1); setTrainingUndo(prev => [...prev, {team:'home',type:'foul',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
-                      <button onClick={() => {
-                        setTrainingUndo(prev => {
-                          const next = [...prev];
-                          const last = next[next.length - 1];
-                          if (!last || last.team !== 'home') return next;
-                          next.pop();
-                          if (last.type === 'score') setTrainingHomeScore(s => Math.max(0, s - last.delta));
-                          if (last.type === 'foul') setTrainingHomeFouls(s => Math.max(0, s - last.delta));
-                          return next;
-                        });
-                      }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
+                      <button onClick={() => adjustTeamScore('home', -1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                      <button onClick={() => adjustTeamScore('home', 1)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                      <button onClick={() => adjustTeamScore('home', 2)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                      <button onClick={() => adjustTeamScore('home', 3)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                      <button onClick={() => adjustTeamFoul('home', 1)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                      <button onClick={() => undoTeamManual('home')} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
                     </div>}
                 </div>
 
@@ -1429,25 +1487,15 @@ export const BasketballBoard: React.FC = () => {
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
                     <span className="text-base md:text-lg">Fouls:</span>
-                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayPlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0) >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayPlayers.filter(p=>p.status==='court').reduce((s,p)=>s+p.fouls,0)}</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
                   {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
-                      <button onClick={() => setTrainingAwayScore(Math.max(0, trainingAwayScore - 1))} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
-                      <button onClick={() => { setTrainingAwayScore(s => s + 1); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
-                      <button onClick={() => { setTrainingAwayScore(s => s + 2); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:2}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
-                      <button onClick={() => { setTrainingAwayScore(s => s + 3); setTrainingUndo(u => [...u, {team:'away',type:'score',delta:3}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
-                      <button onClick={() => { setTrainingAwayFouls(s => s + 1); setTrainingUndo(u => [...u, {team:'away',type:'foul',delta:1}]); }} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
-                      <button onClick={() => {
-                        setTrainingUndo(u => {
-                          const next = [...u];
-                          const last = next[next.length - 1];
-                          if (!last || last.team !== 'away') return next;
-                          next.pop();
-                          if (last.type === 'score') setTrainingAwayScore(s => Math.max(0, s - last.delta));
-                          if (last.type === 'foul') setTrainingAwayFouls(s => Math.max(0, s - last.delta));
-                          return next;
-                        });
-                      }} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
+                      <button onClick={() => adjustTeamScore('away', -1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                      <button onClick={() => adjustTeamScore('away', 1)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                      <button onClick={() => adjustTeamScore('away', 2)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                      <button onClick={() => adjustTeamScore('away', 3)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                      <button onClick={() => adjustTeamFoul('away', 1)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                      <button onClick={() => undoTeamManual('away')} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
                     </div>}
                 </div>
               </div>
