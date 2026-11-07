@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import {
   Play, Pause, Timer, ArrowRightLeft,
   ChevronUp, ChevronDown, Trophy,
   UserCheck, Edit3, Check, RotateCcw,
   Undo2, FileText, List, RefreshCw,
-  LayoutDashboard, Move
+  LayoutDashboard, Move, Monitor, Smartphone,
+  Info, Pencil, Eraser, Trash2, Users
 } from 'lucide-react';
+
+// ==========================================
+// 1. SUPABASE CLIENT INITIALIZATION (Safe Fallback)
+// ==========================================
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
+  : null;
 
 // ==========================================
 // TYPES
@@ -16,7 +28,7 @@ export interface Player {
   number: number;
   points: number;
   fouls: number;
-  status: 'court' | 'bench';
+  status: 'court' | 'bench' | 'pool';
   team: 'home' | 'away';
   x: number;
   y: number;
@@ -33,49 +45,51 @@ interface GameEvent {
   homeScoreBefore: number;
   awayScoreBefore: number;
   timestamp: number;
-  foulPeriod?: number;
 }
 
 // ==========================================
-// HELPERS
+// INLINE TEAM NAME EDITOR (HOME / AWAY)
 // ==========================================
-const formatTime = (s: number) =>
-  `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+const TeamNameEditor: React.FC<{ name: string; onSave: (n: string) => void; className?: string; disabled?: boolean; inputClassName?: string }> = ({ name, onSave, className = '', disabled = false, inputClassName = '' }) => {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(name);
+  const ref = useRef<HTMLInputElement>(null);
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+  useEffect(() => { if (!editing) setVal(name); }, [name, editing]);
+  useEffect(() => { if (editing) { ref.current?.focus(); ref.current?.select(); } }, [editing]);
 
-const uid = () => Math.random().toString(36).slice(2);
+  const save = () => {
+    const t = val.trim().slice(0, 20);
+    if (t && t !== name) onSave(t);
+    else setVal(name);
+    setEditing(false);
+  };
 
-const createHomePlayers = (): Player[] => [
-  { id: 'h1', name: 'Kwong', number: 1, points: 0, fouls: 0, status: 'court', team: 'home', x: 50, y: 30 },
-  { id: 'h2', name: 'Hua',   number: 2, points: 0, fouls: 0, status: 'court', team: 'home', x: 25, y: 40 },
-  { id: 'h3', name: 'Vis',   number: 3, points: 0, fouls: 0, status: 'court', team: 'home', x: 75, y: 40 },
-  { id: 'h4', name: 'Nan',   number: 4, points: 0, fouls: 0, status: 'court', team: 'home', x: 30, y: 22 },
-  { id: 'h5', name: 'Shyong',number: 5, points: 0, fouls: 0, status: 'court', team: 'home', x: 70, y: 22 },
-  { id: 'h6', name: 'Dexter',number: 6, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 15 },
-  { id: 'h7', name: 'Cheng', number: 7, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 30 },
-  { id: 'h8', name: 'Vin',   number: 8, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 45 },
-  { id: 'h9', name: 'Kelvin',number: 9, points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 60 },
-  { id: 'h10',name: 'Kenny', number: 10,points: 0, fouls: 0, status: 'bench', team: 'home', x: 3, y: 75 },
-];
+  if (disabled) {
+    return <span className={className}>{name}</span>;
+  }
 
-const createAwayPlayers = (): Player[] => [
-  { id: 'a1', name: 'Fu',      number: 1, points: 0, fouls: 0, status: 'court', team: 'away', x: 50, y: 70 },
-  { id: 'a2', name: 'Ci',      number: 2, points: 0, fouls: 0, status: 'court', team: 'away', x: 25, y: 60 },
-  { id: 'a3', name: 'Sheng',   number: 3, points: 0, fouls: 0, status: 'court', team: 'away', x: 75, y: 60 },
-  { id: 'a4', name: 'Ping',    number: 4, points: 0, fouls: 0, status: 'court', team: 'away', x: 30, y: 78 },
-  { id: 'a5', name: 'Ivan',    number: 5, points: 0, fouls: 0, status: 'court', team: 'away', x: 70, y: 78 },
-  { id: 'a6', name: 'Qian',    number: 6, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 15 },
-  { id: 'a7', name: 'Ren',     number: 7, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 30 },
-  { id: 'a8', name: 'Player 8',number: 8, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 45 },
-  { id: 'a9', name: 'Player 9',number: 9, points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 60 },
-  { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 97, y: 75 },
-];
+  return editing ? (
+    <span className={`inline-flex items-center gap-1 ${className}`} onClick={(e) => e.stopPropagation()}>
+      <input ref={ref} value={val} onChange={e => setVal(e.target.value)} autoFocus
+        onBlur={save} onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setVal(name); setEditing(false); } }}
+        maxLength={20} placeholder="Team name"
+        className={`bg-slate-700 border border-amber-500 rounded px-2 py-0.5 text-sm text-white focus:outline-none w-28 text-center uppercase ${inputClassName}`} />
+      <button onClick={save} title="Save"><Check size={14} className="text-emerald-400" /></button>
+    </span>
+  ) : (
+    <span className={`cursor-pointer group/teamname inline-flex items-center gap-1 ${className}`}
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit team name">
+      {name}
+      <Edit3 size={13} className="opacity-40 group-hover/teamname:opacity-100 align-middle" />
+    </span>
+  );
+};
 
 // ==========================================
 // INLINE NAME EDITOR
 // ==========================================
-const InlineName: React.FC<{ name: string; onSave: (n: string) => void; className?: string }> = ({ name, onSave, className = '' }) => {
+const InlineName: React.FC<{ name: string; onSave: (n: string) => void; className?: string; disabled?: boolean }> = ({ name, onSave, className = '', disabled = false }) => {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(name);
   const ref = useRef<HTMLInputElement>(null);
@@ -89,6 +103,10 @@ const InlineName: React.FC<{ name: string; onSave: (n: string) => void; classNam
     setEditing(false);
   };
 
+  if (disabled) {
+    return <span className={className}>{name}</span>;
+  }
+
   return editing ? (
     <div className={`flex items-center gap-0.5 ${className}`} onClick={(e) => e.stopPropagation()}>
       <input ref={ref} value={val} onChange={e => setVal(e.target.value)} autoFocus
@@ -99,76 +117,375 @@ const InlineName: React.FC<{ name: string; onSave: (n: string) => void; classNam
   ) : (
     <span className={`cursor-pointer group-hover:underline decoration-dotted decoration-slate-500 ${className}`} 
       onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit">
-      {name}<Edit3 size={7} className="inline ml-0.5 opacity-30" />
+      {name}
+      <Edit3 size={16} className="hidden sm:inline ml-1 opacity-90 align-middle" />
     </span>
   );
+};
+
+// ==========================================
+// SMALL INLINE NUMBER EDITOR
+// ==========================================
+const InlineNumber: React.FC<{ num: number; onSave: (n: number) => void; className?: string; compact?: boolean; disabled?: boolean }> = ({ num, onSave, className = '', compact = false, disabled = false }) => {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(String(num));
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { setVal(String(num)); }, [num]);
+  useEffect(() => { if (editing) ref.current?.select(); }, [editing]);
+  const save = () => {
+    const v = parseInt(val, 10);
+    if (!isNaN(v) && v !== num) onSave(v);
+    setEditing(false);
+  };
+
+  if (disabled) {
+    return <span className={className}>{num}</span>;
+  }
+
+  if (!editing && compact) {
+    return (
+      <span className={`cursor-pointer ${className}`} onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit number">
+        {num}
+      </span>
+    );
+  }
+
+  return editing ? (
+    <div className={`flex items-center gap-1 ${className}`} onClick={e => e.stopPropagation()}>
+      <input ref={ref} value={val} onChange={e => setVal(e.target.value)} autoFocus
+        onBlur={save} onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        className="w-14 bg-slate-700 border border-slate-600 rounded px-1 py-0 text-sm text-white focus:outline-none" />
+      <button onClick={save}><Check size={12} className="text-emerald-400" /></button>
+    </div>
+  ) : (
+    <span className={`cursor-pointer ${className}`} onClick={(e) => { e.stopPropagation(); setEditing(true); }} title="Click to edit number">
+      {num}
+      {!compact && <Edit3 size={10} className="hidden sm:inline ml-1 opacity-30" />}
+    </span>
+  );
+};
+
+// ==========================================
+// HELPERS & MAPPERS
+// ==========================================
+const formatTime = (s: number) =>
+  `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+
+// LAST TOUCH: roster persistence + per-player remove + timeout presets + court labels off
+// PENDING: verify uncommitted diff appears in GitHub Desktop / VS Code
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+const uid = () => Math.random().toString(36).slice(2);
+
+const createHomePlayers = (): Player[] => [
+  { id: 'h1', name: 'Kwong', number: 1, points: 0, fouls: 0, status: 'court', team: 'home', x: 35, y: 45 },
+  { id: 'h2', name: 'Hua',   number: 2, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 22 },
+  { id: 'h3', name: 'Vis',   number: 3, points: 0, fouls: 0, status: 'court', team: 'home', x: 42, y: 78 },
+  { id: 'h4', name: 'Nan',   number: 4, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 30 },
+  { id: 'h5', name: 'Shyong',number: 5, points: 0, fouls: 0, status: 'court', team: 'home', x: 18, y: 70 },
+  { id: 'h6', name: 'Dexter',number: 6, points: 0, fouls: 0, status: 'bench', team: 'home', x: 9.5, y: 91 },
+  { id: 'h7', name: 'Cheng', number: 7, points: 0, fouls: 0, status: 'bench', team: 'home', x: 15.5, y: 91 },
+  { id: 'h8', name: 'Vin',   number: 8, points: 0, fouls: 0, status: 'bench', team: 'home', x: 21.5, y: 91 },
+  { id: 'h9', name: 'Kelvin',number: 9, points: 0, fouls: 0, status: 'bench', team: 'home', x: 27.5, y: 91 },
+  { id: 'h10',name: 'Kenny', number: 10,points: 0, fouls: 0, status: 'bench', team: 'home', x: 33.5, y: 91 },
+];
+
+const createAwayPlayers = (): Player[] => [
+  { id: 'a1', name: 'Fu',      number: 1, points: 0, fouls: 0, status: 'court', team: 'away', x: 65, y: 45 },
+  { id: 'a2', name: 'Ci',      number: 2, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 22 },
+  { id: 'a3', name: 'Sheng',   number: 3, points: 0, fouls: 0, status: 'court', team: 'away', x: 58, y: 78 },
+  { id: 'a4', name: 'Ping',    number: 4, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 30 },
+  { id: 'a5', name: 'Ivan',    number: 5, points: 0, fouls: 0, status: 'court', team: 'away', x: 82, y: 70 },
+  { id: 'a6', name: 'Qian',    number: 6, points: 0, fouls: 0, status: 'bench', team: 'away', x: 64.5, y: 91 },
+  { id: 'a7', name: 'Ren',     number: 7, points: 0, fouls: 0, status: 'bench', team: 'away', x: 70.5, y: 91 },
+  { id: 'a8', name: 'Player 8',number: 8, points: 0, fouls: 0, status: 'bench', team: 'away', x: 76.5, y: 91 },
+  { id: 'a9', name: 'Player 9',number: 9, points: 0, fouls: 0, status: 'bench', team: 'away', x: 82.5, y: 91 },
+  { id: 'a10',name: 'Player 10',number:10,points: 0, fouls: 0, status: 'bench', team: 'away', x: 88.5, y: 91 },
+];
+
+// Helper to compute point-to-line segment distance for relative percentages
+const getPointToSegmentDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (dx === 0 && dy === 0) {
+    return Math.sqrt(Math.pow(px - x1, 2) + Math.pow(py - y1, 2));
+  }
+  let t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+  t = Math.max(0, Math.min(1, t));
+  const closestX = x1 + t * dx;
+  const closestY = y1 + t * dy;
+  return Math.sqrt(Math.pow(px - closestX, 2) + Math.pow(py - closestY, 2));
+};
+
+// Maps coordinate scales dynamically when viewing the court vertically [1]
+const getPlayerPos = (player: Player, isVertical: boolean) => {
+  if (!isVertical) {
+    return { x: player.x, y: player.y };
+  }
+  
+  if (player.status === 'bench') {
+    if (player.team === 'home') {
+      const idx = parseInt(player.id.replace('h', ''), 10) - 6; // index 0 to 4
+      const x = 9 + idx * 6;
+      return { x, y: 94 };
+    } else {
+      const idx = parseInt(player.id.replace('a', ''), 10) - 6; // index 0 to 4
+      const x = 71 + idx * 6;
+      return { x, y: 94 };
+    }
+  }
+  
+  // swap coordinates for visual vertical layout (baseline to height, sideline to width) [1]
+  return { x: player.y, y: player.x };
+};
+
+// projects manual drawings dynamically depending on the current viewport layout [1]
+const projectDrawings = (points: { x: number; y: number }[], isVertical: boolean) => {
+  if (!isVertical) {
+    return points.map(p => `${p.x * 5.8},${p.y * 3.8}`).join(' ');
+  } else {
+    return points.map(p => `${p.y * 3.8},${p.x * 5.8}`).join(' ');
+  }
 };
 
 // ==========================================
 // MAIN COMPONENT
 // ==========================================
 export const BasketballBoard: React.FC = () => {
+  useEffect(() => { console.log('[BB] mount'); });
+
+  // Sync Role States
+  const [mode, setMode] = useState<'controller' | 'viewer'>('controller'); 
+  const [isSyncEnabled, setIsSyncEnabled] = useState<boolean>(true); 
+  const [syncStatus, setSyncStatus] = useState<string>('DISCONNECTED');
+  const [roomId, setRoomId] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'default';
+    const params = new URLSearchParams(window.location.search);
+    return params.get('room') || 'default';
+  });
+
+  // Training simple scoreboard state
+  const [trainingHomeScore, setTrainingHomeScore] = useState(0);
+  const [trainingAwayScore, setTrainingAwayScore] = useState(0);
+  const [trainingHomeFouls, setTrainingHomeFouls] = useState(0);
+  const [trainingAwayFouls, setTrainingAwayFouls] = useState(0);
+  const [trainingUndo, setTrainingUndo] = useState<Array<{ team: 'home' | 'away'; type: 'score' | 'foul'; delta: number }>>([]);
+  // Team manual adjustments (quick buttons under the big total).
+  // These add to the team total WITHOUT touching any player's personal points/fouls.
+  const [homeManualScore, setHomeManualScore] = useState(0);
+  const [awayManualScore, setAwayManualScore] = useState(0);
+  const [homeManualFouls, setHomeManualFouls] = useState(0);
+  const [awayManualFouls, setAwayManualFouls] = useState(0);
+  const [periodFoulBaseline, setPeriodFoulBaseline] = useState<Record<string, number>>({});
+  const [manualUndo, setManualUndo] = useState<Array<{ team: 'home' | 'away'; type: 'score' | 'foul'; delta: number }>>([]);
+
+  // UI View States
   const initialView = typeof window !== 'undefined' && window.location && window.location.pathname === '/court' ? 'court' : 'scoreboard';
-  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); // View switcher state [1]
-  const [homePlayers, setHomePlayers] = useState<Player[]>(createHomePlayers);
-  const [awayPlayers, setAwayPlayers] = useState<Player[]>(createAwayPlayers);
+  const [view, setView] = useState<'scoreboard' | 'court'>(initialView); 
+
+  // Game States
+  const loadRosterState = useCallback((): {home: Player[]; away: Player[]; pool: Player[]; homeName: string; awayName: string} => {
+    const fallback = { home: createHomePlayers(), away: createAwayPlayers(), pool: [] as Player[], homeName: 'HOME', awayName: 'AWAY' };
+    if (typeof window === 'undefined') {
+      return fallback;
+    }
+    try {
+      const raw = localStorage.getItem('basketball-roster-state');
+      if (!raw) return fallback;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.homePlayers) && Array.isArray(data.awayPlayers) && Array.isArray(data.poolPlayers)) {
+        return {
+          home: data.homePlayers,
+          away: data.awayPlayers,
+          pool: data.poolPlayers,
+          homeName: typeof data.homeName === 'string' && data.homeName.trim() ? data.homeName : 'HOME',
+          awayName: typeof data.awayName === 'string' && data.awayName.trim() ? data.awayName : 'AWAY',
+        };
+      }
+    } catch {
+      // ignore corrupt storage
+    }
+    return fallback;
+  }, []);
+  const initialRosterState = loadRosterState();
+  const [homePlayers, setHomePlayers] = useState<Player[]>(initialRosterState.home);
+  const [awayPlayers, setAwayPlayers] = useState<Player[]>(initialRosterState.away);
+  const [poolPlayers, setPoolPlayers] = useState<Player[]>(initialRosterState.pool);
+  const [homeName, setHomeName] = useState(initialRosterState.homeName);
+  const [awayName, setAwayName] = useState(initialRosterState.awayName);
+
+  // Standalone tactical board tokens + ball - independent from roster state
+  interface TacticToken { id: string; team: 'home' | 'away'; number: number; x: number; y: number; }
+  const DEFAULT_TACTIC_TOKENS: TacticToken[] = [
+    { id: 'h1', team: 'home' as const, number: 1, x: 27.5, y: 30 },
+    { id: 'h2', team: 'home' as const, number: 2, x: 22, y: 22 },
+    { id: 'h3', team: 'home' as const, number: 3, x: 33, y: 22 },
+    { id: 'h4', team: 'home' as const, number: 4, x: 18, y: 45 },
+    { id: 'h5', team: 'home' as const, number: 5, x: 37, y: 45 },
+    { id: 'a1', team: 'away' as const, number: 1, x: 72.5, y: 70 },
+    { id: 'a2', team: 'away' as const, number: 2, x: 67, y: 78 },
+    { id: 'a3', team: 'away' as const, number: 3, x: 78, y: 78 },
+    { id: 'a4', team: 'away' as const, number: 4, x: 63, y: 55 },
+    { id: 'a5', team: 'away' as const, number: 5, x: 82, y: 55 },
+  ];
+  const DEFAULT_BALL_POS = { x: 50, y: 50 };
+  const loadTacticalState = useCallback((): { tokens: TacticToken[]; ball: { x: number; y: number } } => {
+    if (typeof window === 'undefined') return { tokens: DEFAULT_TACTIC_TOKENS, ball: DEFAULT_BALL_POS };
+    try {
+      const raw = localStorage.getItem('basketball-tactics');
+      if (!raw) {
+        // Default 5v5 tokens + center ball
+        return { tokens: DEFAULT_TACTIC_TOKENS, ball: DEFAULT_BALL_POS };
+      }
+      const data = JSON.parse(raw);
+      const tokens = Array.isArray(data.tokens) ? data.tokens : (Array.isArray(data) ? data : DEFAULT_TACTIC_TOKENS);
+      const ball = data.ball && typeof data.ball.x === 'number' && typeof data.ball.y === 'number'
+        ? { x: data.ball.x, y: data.ball.y } : { ...DEFAULT_BALL_POS };
+      return { tokens, ball };
+    } catch { /* ignore */ }
+    return { tokens: DEFAULT_TACTIC_TOKENS, ball: DEFAULT_BALL_POS };
+  }, []);
+  const initialTacticalTokens = loadTacticalState();
+  const [tacticTokens, setTacticTokens] = useState<TacticToken[]>(initialTacticalTokens.tokens);
+  const [ballPos, setBallPos] = useState<{ x: number; y: number }>(initialTacticalTokens.ball);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('basketball-tactics', JSON.stringify({ tokens: tacticTokens, ball: ballPos }));
+  }, [tacticTokens, ballPos]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('basketball-roster-state', JSON.stringify({
+      homePlayers,
+      awayPlayers,
+      poolPlayers,
+      homeName,
+      awayName
+    }));
+  }, [homePlayers, awayPlayers, poolPlayers, homeName, awayName]);
+  const [poolName, setPoolName] = useState('');
+  const [poolNumber, setPoolNumber] = useState<number>(1);
   const [gameTime, setGameTime] = useState(600);
   const [shotClock, setShotClock] = useState(24);
   const [isRunning, setIsRunning] = useState(false);
   const [inputMins, setInputMins] = useState('10');
+  const [clockMode, setClockMode] = useState<'countdown' | 'stopwatch'>('countdown');
   const [period, setPeriod] = useState(1);
-  const [foulPeriod, setFoulPeriod] = useState(0);
-
-  const changePeriod = (nextPeriod: number) => {
-    if (nextPeriod === period) return;
-    setPeriod(nextPeriod);
-    setFoulPeriod(current => current + 1);
-  };
+  const [timeoutMode, setTimeoutMode] = useState(false);
+  const [timeoutSavedGameTime, setTimeoutSavedGameTime] = useState<number | null>(null);
+  const [timeoutRemaining, setTimeoutTimeoutRemaining] = useState<number>(0);
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
+  const [showDiagramLabels, setShowDiagramLabels] = useState(false);
+  
+  // Tactical Board State & Drawing Systems
+  const [activeTool, setActiveTool] = useState<'move' | 'draw' | 'erase'>('move');
+  const [drawings, setDrawings] = useState<{ id: string; points: { x: number; y: number }[]; color: string; width: number }[]>([]);
+  const [currentDrawingPoints, setCurrentDrawingPoints] = useState<{ x: number; y: number }[]>([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [strokeColor, setStrokeColor] = useState('#ff4444');
+  const [penSize, setPenSize] = useState<number>(4);
+  const [eraserSize, setEraserSize] = useState<number>(8);
+  
+  // Multi-Touch Pointer Drag Tracking Refs
+  const activeDragsRef = useRef<Record<number, { 
+    playerId: string; 
+    startX: number; 
+    startY: number; 
+    playerStartX: number; 
+    playerStartY: number;
+  }>>({});
 
-  // Instant Click Substitution state
+  // Timer sync helper key
+  const [timerResetKey, setTimerResetKey] = useState(0);
+
+  // UI States
+  const [showDebug, setShowDebug] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const [showScoresheetMobile, setShowScoresheetMobile] = useState(false);
+
+  // Instant Substitution
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
 
-  // Drag-drop substitution state
+  // Drag-drop substitution
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
-  // Tactical court drag state
+  // Tactical court drag states
   const [courtDragId, setCourtDragId] = useState<string | null>(null);
   const courtRef = useRef<HTMLDivElement>(null);
 
-  // Timer loop
+  const isViewer = mode === 'viewer';
+
+  // SSR-Safe Mobile Device Touch Detection
+  const isMobileDevice = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  // Monitor physical mobile screen layout context (Portrait vs Landscape) [1]
+  const [isPortrait, setIsPortrait] = useState(false);
+
   useEffect(() => {
-    if (!isRunning) return;
-    const t = setInterval(() => {
-      setGameTime(p => { if (p <= 1) { setIsRunning(false); return 0; } return p - 1; });
-      setShotClock(p => p <= 1 ? 0 : p - 1);
-    }, 1000);
-    return () => clearInterval(t);
-  }, [isRunning]);
+    if (typeof window === 'undefined' || !isMobileDevice) {
+      setIsPortrait(false);
+      return;
+    }
 
-  // Derived values
-  const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
-  const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
-  // Team fouls belong to the current period, regardless of substitutions.
-  const periodFouls = gameEvents.filter(ev => ev.type === 'foul' && ev.foulPeriod === foulPeriod);
-  const homeFouls = periodFouls.filter(ev => ev.team === 'home').reduce((sum, ev) => sum + ev.value, 0);
-  const awayFouls = periodFouls.filter(ev => ev.team === 'away').reduce((sum, ev) => sum + ev.value, 0);
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
 
-  // Scoresheet map
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, [isMobileDevice]);
+
+  // Evaluates active layout profile (Restricted strictly to mobile setups) [1]
+  const isVerticalView = isMobileDevice && isPortrait;
+
+  // ── DERIVED VALUES ──
+  // Team totals = player points + manual team adjustments (quick buttons).
+  // Player-card +1/+2/+3/+F keep feeding player points (and thus the total).
+  // Quick -1/+1/+2/+3/F under the big score only touch the manual part.
+  const homePlayerScore = homePlayers.reduce((s, p) => s + p.points, 0);
+  const awayPlayerScore = awayPlayers.reduce((s, p) => s + p.points, 0);
+  const homeScore = homePlayerScore + homeManualScore;
+  const awayScore = awayPlayerScore + awayManualScore;
+  const homePlayerFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + Math.max(0, p.fouls - (periodFoulBaseline[p.id] ?? 0)), 0);
+  const awayPlayerFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + Math.max(0, p.fouls - (periodFoulBaseline[p.id] ?? 0)), 0);
+  const homeFouls = homePlayerFouls + homeManualFouls;
+  const awayFouls = awayPlayerFouls + awayManualFouls;
+
+  const changePeriod = (nextPeriod: number) => {
+    if (isViewer || nextPeriod === period) return;
+    setPeriodFoulBaseline(Object.fromEntries([...homePlayers, ...awayPlayers, ...poolPlayers].map(p => [p.id, p.fouls])));
+    setHomeManualFouls(0);
+    setAwayManualFouls(0);
+    setManualUndo(prev => prev.filter(entry => entry.type !== 'foul'));
+    setPeriod(nextPeriod);
+  };
+
   const scoresheetMap = useMemo(() => {
-    const home: Record<number, number> = {};
-    const away: Record<number, number> = {};
-    let hs = 0, as = 0;
-    for (const ev of gameEvents) {
-      if (ev.type !== 'score') continue;
+    const home: Record<number, { playerNumber: number; playerName: string }> = {};
+    const away: Record<number, { playerNumber: number; playerName: string }> = {};
+    let homeTotal = 0;
+    let awayTotal = 0;
+    const events = [...gameEvents].filter(e => e.type === 'score').sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    for (const ev of events) {
+      if (!ev.value || ev.value <= 0) continue;
       if (ev.team === 'home') {
-        for (let i = hs + 1; i <= hs + ev.value; i++) home[i] = ev.playerNumber;
-        hs += ev.value;
+        homeTotal += ev.value;
+        home[homeTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
       } else {
-        for (let i = as + 1; i <= as + ev.value; i++) away[i] = ev.playerNumber;
-        as += ev.value;
+        awayTotal += ev.value;
+        away[awayTotal] = { playerNumber: ev.playerNumber, playerName: ev.playerName };
       }
     }
     return { home, away };
@@ -176,9 +493,22 @@ export const BasketballBoard: React.FC = () => {
 
   const maxSheetRows = Math.max(homeScore, awayScore, 20);
 
+  const homeScorers = useMemo(() =>
+    [...homePlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [homePlayers]
+  );
+
+  const awayScorers = useMemo(() =>
+    [...awayPlayers].filter(p => p.points > 0).sort((a, b) => b.points - a.points),
+    [awayPlayers]
+  );
+
+  const bcRef = useRef<BroadcastChannel | null>(null);
+  const syncChannelRef = useRef<any>(null);
+
   // Substitution execution logic
   const executeSubstitution = useCallback((id1: string, id2: string) => {
-    if (id1 === id2) return;
+    if (id1 === id2 || isViewer) return;
     const allPlayers = [...homePlayers, ...awayPlayers];
     const p1 = allPlayers.find(p => p.id === id1);
     const p2 = allPlayers.find(p => p.id === id2);
@@ -187,144 +517,793 @@ export const BasketballBoard: React.FC = () => {
     if (p1.status === p2.status) return;
 
     const setter = p1.team === 'home' ? setHomePlayers : setAwayPlayers;
-    setter(prev => prev.map(p => {
-      if (p.id === p1.id) return { ...p, status: p2.status };
-      if (p.id === p2.id) return { ...p, status: p1.status };
-      return p;
-    }));
-  }, [homePlayers, awayPlayers]);
+    setter(prev => {
+      const idx1 = prev.findIndex(p => p.id === id1);
+      const idx2 = prev.findIndex(p => p.id === id2);
+      if (idx1 === -1 || idx2 === -1) return prev;
+      const result = [...prev];
+      [result[idx1], result[idx2]] = [result[idx2], result[idx1]];
+      return result.map(p => {
+        if (p.id === id1) return { ...p, status: p2.status };
+        if (p.id === id2) return { ...p, status: p1.status };
+        return p;
+      });
+    });
+  }, [homePlayers, awayPlayers, isViewer]);
+
+  // ── LOCAL BROADCAST CHANNEL ──
+  // NOTE: BroadcastChannel only works same browser/device. Cross-device display uses Supabase below.
+  useEffect(() => {
+    try {
+      bcRef.current = new BroadcastChannel(`scoreboard-${roomId}`);
+      const chan = bcRef.current;
+      chan.onmessage = (ev) => {
+        if (!ev.data) return;
+        if (ev.data.type === 'request') {
+          chan.postMessage({ 
+            type: 'init', 
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos } 
+          });
+        }
+      };
+      return () => { chan.close(); bcRef.current = null; };
+    } catch (e) {
+      bcRef.current = null;
+    }
+  }, [roomId, homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos]);
+
+  useEffect(() => {
+    const payload = { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos };
+    try { bcRef.current?.postMessage({ type: 'update', state: payload }); } catch (e) { /* ignore */ }
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos]);
+
+  // ── ESTABLISH REALTIME CONNECTION ──
+  useEffect(() => {
+    if (!supabase || !isSyncEnabled) {
+      setSyncStatus('OFFLINE');
+      return;
+    }
+
+    setSyncStatus('CONNECTING...');
+
+    const channel = supabase.channel(`basketball-sync-${roomId}`, {
+      config: { broadcast: { self: false } }
+    });
+
+    channel
+      .on('broadcast', { event: 'state-update' }, (response: any) => {
+        if (mode !== 'viewer') return;
+        const data = response.payload;
+        if (!data) return;
+        setHomePlayers(data.homePlayers);
+        setAwayPlayers(data.awayPlayers);
+        setGameTime(data.gameTime);
+        
+        if (data.shotClock !== shotClock && (data.shotClock === 24 || data.shotClock === 14)) {
+          setTimerResetKey(k => k + 1);
+        }
+        setShotClock(data.shotClock);
+        
+        setIsRunning(data.isRunning);
+        setPeriod(data.period);
+        setGameEvents(data.gameEvents);
+        setView(data.view);
+        setClockMode(data.clockMode);
+        
+        if (data.drawings !== undefined) setDrawings(data.drawings);
+        if (data.currentDrawingPoints !== undefined) setCurrentDrawingPoints(data.currentDrawingPoints);
+        if (Array.isArray(data.tacticTokens)) setTacticTokens(data.tacticTokens);
+        if (data.ballPos && typeof data.ballPos.x === 'number' && typeof data.ballPos.y === 'number') setBallPos(data.ballPos);
+        if (typeof data.homeName === 'string' && data.homeName.trim()) setHomeName(data.homeName);
+        if (typeof data.awayName === 'string' && data.awayName.trim()) setAwayName(data.awayName);
+        if (typeof data.homeManualScore === 'number') setHomeManualScore(data.homeManualScore);
+        if (typeof data.awayManualScore === 'number') setAwayManualScore(data.awayManualScore);
+        if (data.periodFoulBaseline) setPeriodFoulBaseline(data.periodFoulBaseline);
+        if (typeof data.homeManualFouls === 'number') setHomeManualFouls(data.homeManualFouls);
+        if (typeof data.awayManualFouls === 'number') setAwayManualFouls(data.awayManualFouls);
+      })
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          setSyncStatus('SUBSCRIBED');
+        } else if (status === 'CHANNEL_ERROR') {
+          setSyncStatus('ERROR');
+          console.error("Supabase Realtime Channel Error:", err);
+        } else {
+          setSyncStatus(status);
+        }
+      });
+
+    syncChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      syncChannelRef.current = null;
+    };
+  }, [mode, isSyncEnabled, roomId, shotClock]);
+
+  // ── BROADCAST STATE CHANGES ──
+  useEffect(() => {
+    if (mode !== 'controller' || !syncChannelRef.current || !isSyncEnabled) return;
+
+    syncChannelRef.current.send({
+      type: 'broadcast',
+      event: 'state-update',
+      payload: {
+        homePlayers,
+        awayPlayers,
+        homeName,
+        awayName,
+        homeManualScore,
+        awayManualScore,
+        homeManualFouls,
+        awayManualFouls,
+        periodFoulBaseline,
+        homeFouls,
+        awayFouls,
+        gameTime,
+        shotClock,
+        isRunning,
+        period,
+        gameEvents,
+        view,
+        clockMode,
+        drawings,
+        currentDrawingPoints,
+        tacticTokens,
+        ballPos
+      }
+    });
+  }, [homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, periodFoulBaseline, homeFouls, awayFouls, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, tacticTokens, ballPos, roomId]);
+
+  // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ──
+  // Also handles the ball token (playerId === 'ball').
+  const handleCourtPointerDown = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
+    if (isViewer) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = courtRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const startX = ((e.clientX - rect.left) / rect.width) * 100;
+    const startY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    let projected: { x: number; y: number } | null = null;
+    if (playerId === 'ball') {
+      projected = isVerticalView ? { x: ballPos.y, y: ballPos.x } : { x: ballPos.x, y: ballPos.y };
+    } else {
+      const p = tacticTokens.find(pl => pl.id === playerId);
+      if (!p) return;
+      // Get position in current visual perspective (vertical or horizontal)
+      projected = isVerticalView ? { x: p.y, y: p.x } : { x: p.x, y: p.y };
+    }
+
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    activeDragsRef.current[e.pointerId] = {
+      playerId,
+      startX,
+      startY,
+      playerStartX: projected.x,
+      playerStartY: projected.y
+    };
+
+    setCourtDragId(playerId);
+  };
+
+  const handleCourtPointerMove = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
+    if (isViewer) return;
+    const dragInfo = activeDragsRef.current[e.pointerId];
+    if (!dragInfo || dragInfo.playerId !== playerId) return;
+
+    const rect = courtRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const clientXPercent = ((e.clientX - rect.left) / rect.width) * 100;
+    const clientYPercent = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const deltaX = clientXPercent - dragInfo.startX;
+    const deltaY = clientYPercent - dragInfo.startY;
+
+    const visualX = clamp(dragInfo.playerStartX + deltaX, 0, 100);
+    const visualY = clamp(dragInfo.playerStartY + deltaY, 0, 100);
+
+    let updatedX = visualX;
+    let updatedY = visualY;
+
+    if (isVerticalView) {
+      updatedX = visualY;
+      updatedY = visualX;
+    }
+
+    if (playerId === 'ball') {
+      setBallPos({ x: updatedX, y: updatedY });
+      return;
+    }
+
+    setTacticTokens(prev => prev.map(t => t.id === playerId ? { ...t, x: updatedX, y: updatedY } : t));
+  };
+
+  const handleCourtPointerUp = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
+    if (isViewer) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (err) {
+      // ignore
+    }
+    delete activeDragsRef.current[e.pointerId];
+    setCourtDragId(null);
+  };
+
+  const handleCourtPointerCancel = (e: React.PointerEvent<HTMLDivElement>, playerId: string) => {
+    if (isViewer) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (err) {
+      // ignore
+    }
+    delete activeDragsRef.current[e.pointerId];
+    setCourtDragId(null);
+  };
+
+  // ── TACTICAL BOARD FREEHAND DRAWING & ERASING HANDLERS ──
+  const handleCourtBgPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isViewer || activeTool === 'move') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = courtRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const visualX = ((e.clientX - rect.left) / rect.width) * 100;
+    const visualY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    // Save drawing point in the base horizontal reference system [1]
+    const savedX = isVerticalView ? visualY : visualX;
+    const savedY = isVerticalView ? visualX : visualY;
+
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    if (activeTool === 'draw') {
+      setIsDrawing(true);
+      setCurrentDrawingPoints([{ x: savedX, y: savedY }]);
+    } else if (activeTool === 'erase') {
+      setIsDrawing(true);
+      eraseAtPoint(savedX, savedY);
+    }
+  };
+
+  const handleCourtBgPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isViewer || !isDrawing) return;
+
+    const rect = courtRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const visualX = ((e.clientX - rect.left) / rect.width) * 100;
+    const visualY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const savedX = isVerticalView ? visualY : visualX;
+    const savedY = isVerticalView ? visualX : visualY;
+
+    if (activeTool === 'draw') {
+      setCurrentDrawingPoints(prev => [...prev, { x: savedX, y: savedY }]);
+    } else if (activeTool === 'erase') {
+      eraseAtPoint(savedX, savedY);
+    }
+  };
+
+  const handleCourtBgPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isViewer) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (err) {}
+
+    if (activeTool === 'draw' && isDrawing && currentDrawingPoints.length > 1) {
+      setDrawings(prev => [
+        ...prev,
+        {
+          id: uid(),
+          points: currentDrawingPoints,
+          color: strokeColor,
+          width: penSize
+        }
+      ]);
+    }
+
+    setIsDrawing(false);
+    setCurrentDrawingPoints([]);
+  };
+
+  const eraseAtPoint = (ex: number, ey: number) => {
+    setDrawings(prev => {
+      return prev.filter(drawing => {
+        const pts = drawing.points;
+        const threshold = eraserSize; 
+        for (let i = 0; i < pts.length - 1; i++) {
+          const dist = getPointToSegmentDistance(ex, ey, pts[i].x, pts[i].y, pts[i+1].x, pts[i+1].y);
+          if (dist < threshold) {
+            return false;
+          }
+        }
+        return true;
+      });
+    });
+  };
+
+  // ── INDEPENDENT GAME CLOCK LOOP ──
+  // Controller owns the clock. Viewer NEVER ticks locally — it only mirrors
+  // gameTime/shotClock/isRunning broadcast from the controller. Otherwise the
+  // viewer double-ticks and fights incoming sync (glitching/jumping clock).
+  useEffect(() => {
+    if (isViewer) return;
+    if (!isRunning || timeoutMode) return;
+    const t = setInterval(() => {
+      setGameTime(p => {
+        if (clockMode === 'countdown') {
+          if (p <= 1) { setIsRunning(false); return 0; }
+          return p - 1;
+        }
+        return p + 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isViewer, isRunning, clockMode, timeoutMode]);
+
+  // ── TIMEOUT DURATION LOOP ──
+  useEffect(() => {
+    if (isViewer) return;
+    if (!isRunning || !timeoutMode) return;
+    const t = setInterval(() => {
+      setTimeoutTimeoutRemaining(p => {
+        if (p <= 1) {
+          setIsRunning(false);
+          setTimeoutMode(false);
+          setTimeoutTimeoutRemaining(0);
+          return 0;
+        }
+        return p - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isViewer, isRunning, timeoutMode]);
+
+  // ── INDEPENDENT SHOT CLOCK LOOP ──
+  useEffect(() => {
+    if (isViewer) return;
+    if (!isRunning || timeoutMode) return;
+    const t = setInterval(() => {
+      setShotClock(p => (p <= 1 ? 0 : p - 1));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [isViewer, isRunning, timeoutMode, timerResetKey]);
+
+  // Team manual quick-score: changes team total, NOT any player's personal score/fouls.
+  const adjustTeamScore = useCallback((team: 'home' | 'away', delta: number) => {
+    if (isViewer) return;
+    if (team === 'home') {
+      setHomeManualScore(s => Math.max(-homePlayerScore, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'score', delta }]);
+    } else {
+      setAwayManualScore(s => Math.max(-awayPlayerScore, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'score', delta }]);
+    }
+  }, [isViewer, homePlayerScore, awayPlayerScore]);
+
+  const adjustTeamFoul = useCallback((team: 'home' | 'away', delta: number) => {
+    if (isViewer) return;
+    if (team === 'home') {
+      setHomeManualFouls(s => Math.max(0, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'foul', delta }]);
+    } else {
+      setAwayManualFouls(s => Math.max(0, s + delta));
+      if (delta !== 0) setManualUndo(prev => [...prev, { team, type: 'foul', delta }]);
+    }
+  }, [isViewer]);
+
+  const undoTeamManual = useCallback((team: 'home' | 'away') => {
+    if (isViewer) return;
+    setManualUndo(prev => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (!last || last.team !== team) return prev;
+      next.pop();
+      if (last.type === 'score') {
+        if (team === 'home') setHomeManualScore(s => Math.max(-homePlayerScore, s - last.delta));
+        else setAwayManualScore(s => Math.max(-awayPlayerScore, s - last.delta));
+      } else {
+        if (team === 'home') setHomeManualFouls(s => Math.max(0, s - last.delta));
+        else setAwayManualFouls(s => Math.max(0, s - last.delta));
+      }
+      return next;
+    });
+  }, [isViewer, homePlayerScore, awayPlayerScore]);
 
   // Point scoring actions
   const addPoints = useCallback((team: 'home' | 'away', courtIndex: number, pts: number) => {
+    if (isViewer) return;
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
     setter(prev => {
       const court = prev.filter(p => p.status === 'court');
       const target = court[courtIndex];
       if (!target) return prev;
-      const hs = homePlayers.reduce((s, p) => s + p.points, 0);
-      const as = awayPlayers.reduce((s, p) => s + p.points, 0);
-      setGameEvents(evs => [...evs, {
-        id: uid(), type: 'score', team, playerId: target.id,
-        playerNumber: target.number, playerName: target.name,
-        value: pts, homeScoreBefore: hs, awayScoreBefore: as, timestamp: Date.now()
-      }]);
+      setGameEvents(prevEvs => {
+        const now = Date.now();
+        const hs = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'home').reduce((s, e) => s + e.value, 0);
+        const as = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'away').reduce((s, e) => s + e.value, 0);
+        const newEv = {
+          id: uid(), type: 'score' as const, team, playerId: target.id,
+          playerNumber: target.number, playerName: target.name,
+          value: pts, homeScoreBefore: hs, awayScoreBefore: as, timestamp: now
+        };
+        const last = prevEvs[prevEvs.length - 1];
+        if (last && last.type === 'score' && last.team === team && last.playerId === target.id && last.value === pts && Math.abs((last.timestamp || 0) - now) < 60) {
+          return prevEvs;
+        }
+        return [...prevEvs, newEv];
+      });
       return prev.map(p => p.id === target.id ? { ...p, points: Math.max(0, p.points + pts) } : p);
     });
-  }, [homePlayers, awayPlayers]);
+  }, [homePlayers, awayPlayers, isViewer]);
 
-  // Record personal fouls throughout the game and team fouls for this period.
+  // Foul assignment actions
   const addFoul = useCallback((team: 'home' | 'away', courtIndex: number, delta: number) => {
-    const players = team === 'home' ? homePlayers : awayPlayers;
-    const target = players.filter(p => p.status === 'court')[courtIndex];
-    if (!target) return;
-    const value = Math.max(0, target.fouls + delta) - target.fouls;
-    if (!value) return;
-    const currentFouls = gameEvents
-      .filter(ev => ev.type === 'foul' && ev.playerId === target.id && ev.foulPeriod === foulPeriod)
-      .reduce((sum, ev) => sum + ev.value, 0);
+    if (isViewer) return;
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
-    setter(prev => prev.map(p => p.id === target.id ? { ...p, fouls: p.fouls + value } : p));
-    setGameEvents(prev => [...prev, {
-      id: uid(), type: 'foul', team, playerId: target.id,
-      playerNumber: target.number, playerName: target.name,
-      value, homeScoreBefore: homeScore, awayScoreBefore: awayScore, timestamp: Date.now(),
-      // Correcting an earlier personal foul must not subtract from this period's total.
-      foulPeriod: value > 0 || currentFouls > 0 ? foulPeriod : undefined,
-    }]);
-  }, [homePlayers, awayPlayers, gameEvents, foulPeriod, homeScore, awayScore]);
+    setter(prev => {
+      const court = prev.filter(p => p.status === 'court');
+      const target = court[courtIndex];
+      if (!target) return prev;
+      if (delta > 0) {
+        setGameEvents(prevEvs => {
+          const now = Date.now();
+          const hs = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'home').reduce((s, e) => s + e.value, 0);
+          const as = prevEvs.filter(ev => ev.type === 'score' && ev.team === 'away').reduce((s, e) => s + e.value, 0);
+          const newEv = {
+            id: uid(), type: 'foul' as const, team, playerId: target.id,
+            playerNumber: target.number, playerName: target.name,
+            value: delta, homeScoreBefore: hs, awayScoreBefore: as, timestamp: now
+          };
+          const last = prevEvs[prevEvs.length - 1];
+          if (last && last.type === 'foul' && last.team === team && last.playerId === target.id && last.value === delta && Math.abs((last.timestamp || 0) - now) < 60) {
+            return prevEvs;
+          }
+          return [...prevEvs, newEv];
+        });
+      }
+      return prev.map(p => p.id === target.id ? { ...p, fouls: Math.max(0, p.fouls + delta) } : p);
+    });
+  }, [homePlayers, awayPlayers, isViewer]);
 
-  const undoLast = useCallback(() => {
-    const last = gameEvents[gameEvents.length - 1];
-    if (!last) return;
-    const setter = last.team === 'home' ? setHomePlayers : setAwayPlayers;
-    setter(players => players.map(p =>
-      p.id === last.playerId
-        ? { ...p, [last.type === 'score' ? 'points' : 'fouls']: Math.max(0, (last.type === 'score' ? p.points : p.fouls) - last.value) }
-        : p
-    ));
-    setGameEvents(prev => prev.slice(0, -1));
-  }, [gameEvents]);
+  const undoLast = useCallback((team: 'home' | 'away') => {
+    if (isViewer) return;
+    setGameEvents(prev => {
+      const last = [...prev].reverse().find(ev => ev.team === team);
+      if (!last) return prev;
+      const setter = last.team === 'home' ? setHomePlayers : setAwayPlayers;
+      setter(players => players.map(p =>
+        p.id === last.playerId
+          ? { ...p, [last.type === 'score' ? 'points' : 'fouls']: Math.max(0, (last.type === 'score' ? p.points : p.fouls) - last.value) }
+          : p
+      ));
+      return prev.filter(ev => ev.id !== last.id);
+    });
+  }, [isViewer]);
+
+  const undoAnyLast = useCallback(() => {
+    if (isViewer) return;
+    setGameEvents(prev => {
+      if (!prev.length) return prev;
+      const last = prev[prev.length - 1];
+      const setter = last.team === 'home' ? setHomePlayers : setAwayPlayers;
+      setter(players => players.map(p =>
+        p.id === last.playerId
+          ? { ...p, [last.type === 'score' ? 'points' : 'fouls']: Math.max(0, (last.type === 'score' ? p.points : p.fouls) - last.value) }
+          : p
+      ));
+      return prev.filter(ev => ev.id !== last.id);
+    });
+  }, [isViewer]);
 
   const resetGame = useCallback(() => {
-    setHomePlayers(createHomePlayers());
-    setAwayPlayers(createAwayPlayers());
+    if (isViewer) return;
+    // Return ONLY the currently-used roster players back to the pool (zeroed).
+    // Never resurrect defaults or previously-deleted players.
+    const returning: Player[] = [...homePlayers, ...awayPlayers].map(p => ({
+      ...p,
+      points: 0,
+      fouls: 0,
+      status: 'pool' as const,
+      x: 50,
+      y: 50,
+    }));
+    setPoolPlayers(prev => {
+      const seen = new Set(prev.map(p => p.id));
+      const fresh = returning.filter(p => !seen.has(p.id));
+      // also zero any existing pool entries so stale stats never linger
+      const cleanedPrev = prev.map(p => ({ ...p, points: 0, fouls: 0, status: 'pool' as const }));
+      return [...cleanedPrev, ...fresh];
+    });
+    setHomePlayers([]);
+    setAwayPlayers([]);
     setGameTime(600);
     setShotClock(24);
     setIsRunning(false);
     setPeriod(1);
-    setFoulPeriod(0);
+    setPeriodFoulBaseline({});
     setGameEvents([]);
     setSelectedCourtId(null);
-  }, []);
+    setTrainingHomeScore(0);
+    setTrainingAwayScore(0);
+    setTrainingHomeFouls(0);
+    setTrainingAwayFouls(0);
+    setTrainingUndo([]);
+    setHomeManualScore(0);
+    setAwayManualScore(0);
+    setHomeManualFouls(0);
+    setAwayManualFouls(0);
+    setManualUndo([]);
+    setTimeoutMode(false);
+    setTimeoutSavedGameTime(null);
+    setTimeoutTimeoutRemaining(0);
+  }, [isViewer, homePlayers, awayPlayers]);
 
   const renamePlayer = useCallback((team: 'home' | 'away', id: string, name: string) => {
+    if (isViewer) return;
     (team === 'home' ? setHomePlayers : setAwayPlayers)(prev =>
       prev.map(p => p.id === id ? { ...p, name } : p)
     );
-  }, []);
+  }, [isViewer]);
 
-  // Instant substitution selection handlers
+  const changePlayerNumber = useCallback((team: 'home' | 'away', id: string, number: number) => {
+    if (isViewer) return;
+    (team === 'home' ? setHomePlayers : setAwayPlayers)(prev => prev.map(p => p.id === id ? { ...p, number } : p));
+  }, [isViewer]);
+
+  const removePlayer = useCallback((team: 'home' | 'away', id: string) => {
+    if (isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => {
+      const target = prev.find(p => p.id === id);
+      if (!target) return prev;
+      setPoolPlayers(pool => [...pool, { ...target, status: 'pool' as const }]);
+      return prev.filter(p => p.id !== id);
+    });
+  }, [isViewer, setHomePlayers, setAwayPlayers, setPoolPlayers]);
+
   const handleSelectCourt = useCallback((id: string) => {
+    if (isViewer) return;
     setSelectedCourtId(prev => prev === id ? null : id);
-  }, []);
+  }, [isViewer]);
 
   const handleBenchClick = useCallback((benchPlayerId: string) => {
-    if (selectedCourtId) {
+    if (selectedCourtId && !isViewer) {
       executeSubstitution(selectedCourtId, benchPlayerId);
       setSelectedCourtId(null);
     }
-  }, [selectedCourtId, executeSubstitution]);
+  }, [selectedCourtId, executeSubstitution, isViewer]);
 
-  // Drag-drop substitution handlers
   const handleRosterDragStart = useCallback((e: React.DragEvent, playerId: string) => {
+    if (isViewer) return;
     e.dataTransfer.effectAllowed = 'move';
     setDraggedId(playerId);
-  }, []);
+  }, [isViewer]);
 
   const handleRosterDrop = useCallback((e: React.DragEvent, targetId: string) => {
     e.preventDefault();
     setDropTargetId(null);
-    if (!draggedId) return;
+    if (!draggedId || isViewer) return;
     executeSubstitution(draggedId, targetId);
     setDraggedId(null);
-  }, [draggedId, executeSubstitution]);
+  }, [draggedId, executeSubstitution, isViewer]);
 
-  // Tactical court drag (Clamps updated to 0-100% to allow fully dropping off-court bounds) [3]
-  const handleCourtPointerDown = useCallback((e: React.PointerEvent, id: string) => {
+  const handleEmptyCourtDrop = useCallback((e: React.DragEvent, team: 'home' | 'away') => {
     e.preventDefault();
-    setCourtDragId(id);
-  }, []);
+    if (!draggedId || isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'court' as const } : p));
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, isViewer]);
 
-  const handleCourtPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!courtDragId) return;
-    const rect = courtRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = clamp(((e.clientX - rect.left) / rect.width) * 100, 0, 100);
-    const y = clamp(((e.clientY - rect.top) / rect.height) * 100, 0, 100);
-    const upd = (prev: Player[]) => prev.map(p => p.id === courtDragId ? { ...p, x, y } : p);
-    setHomePlayers(upd);
-    setAwayPlayers(upd);
-  }, [courtDragId]);
+  const handleEmptyBenchDrop = useCallback((e: React.DragEvent, team: 'home' | 'away') => {
+    e.preventDefault();
+    if (!draggedId || isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => prev.map(p => p.id === draggedId ? { ...p, status: 'bench' as const } : p));
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, isViewer]);
 
-  const handleCourtPointerUp = useCallback(() => setCourtDragId(null), []);
+  const handleCourtGridDrop = useCallback((e: React.DragEvent, team: 'home' | 'away') => {
+    e.preventDefault();
+    if (!draggedId || isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => {
+      const court = prev.filter(p => p.status === 'court');
+      const dragged = prev.find(p => p.id === draggedId);
+      if (court.length >= 5 || !dragged || dragged.status !== 'bench') return prev;
+      const otherBench = prev.filter(p => p.status === 'bench' && p.id !== draggedId);
+      return [
+        ...court,
+        { ...dragged, status: 'court' as const },
+        ...otherBench
+      ];
+    });
+    setDraggedId(null);
+    setDropTargetId(null);
+  }, [draggedId, isViewer]);
+
+  const addPoolPlayer = useCallback(() => {
+    if (isViewer) return;
+    const name = poolName.trim() || 'Player';
+    const id = `pool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const newPlayer: Player = {
+      id,
+      name,
+      number: poolNumber || 1,
+      points: 0,
+      fouls: 0,
+      status: 'pool',
+      team: 'home',
+      x: 50,
+      y: 50,
+    };
+    setPoolPlayers(prev => [...prev, newPlayer]);
+    setPoolName('');
+  }, [poolName, poolNumber, isViewer]);
+
+  const movePoolPlayerToTeam = useCallback((playerId: string, team: 'home' | 'away') => {
+    if (isViewer) return;
+    const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(prev => {
+      const existing = prev.find(p => p.id === playerId);
+      const inThisTeam = !!existing;
+      if (inThisTeam) return prev.map(p => p.id === playerId ? { ...p, status: 'bench' as const } : p);
+      const pool = poolPlayers.find(p => p.id === playerId);
+      if (!pool) return prev;
+      const court = prev.filter(p => p.status === 'court');
+      if (court.length >= 5) {
+        return [...prev, { ...pool, status: 'bench' as const, team }];
+      }
+      return [...prev, { ...pool, status: 'court' as const, team }];
+    });
+    setPoolPlayers(prev => prev.filter(p => p.id !== playerId));
+  }, [poolPlayers, isViewer]);
+
+  const handlePoolDragStart = useCallback((e: React.DragEvent, playerId: string) => {
+    if (isViewer) return;
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedId(playerId);
+  }, [isViewer]);
 
   const handleSetTime = useCallback(() => {
-    const m = parseInt(inputMins, 10);
-    if (!isNaN(m) && m > 0) setGameTime(m * 60);
-  }, [inputMins]);
+    if (isViewer) return;
+    const raw = inputMins.trim();
+    let seconds: number;
+    if (raw.includes(':')) {
+      const [m, s] = raw.split(':').map(Number);
+      seconds = (isNaN(m) ? 0 : m) * 60 + (isNaN(s) ? 0 : s);
+    } else {
+      const m = parseInt(raw, 10);
+      seconds = isNaN(m) ? 0 : m * 60;
+    }
+    setTimeoutMode(false);
+    setTimeoutSavedGameTime(null);
+    setGameTime(Math.max(0, seconds));
+    setIsRunning(false);
+  }, [inputMins, isViewer]);
+
+  const startTimeout = useCallback((seconds: number) => {
+    if (isViewer) return;
+    setTimeoutSavedGameTime(gameTime);
+    setTimeoutTimeoutRemaining(Math.max(0, seconds));
+    setIsRunning(true);
+    setTimeoutMode(true);
+  }, [gameTime, isViewer]);
+
+  const resumeFromTimeout = useCallback(() => {
+    if (isViewer) return;
+    setIsRunning(false);
+    setTimeoutMode(false);
+    setTimeoutTimeoutRemaining(0);
+    setTimeoutSavedGameTime(null);
+  }, [isViewer]);
+
+  const handleResetShotClock = (seconds: number) => {
+    if (isViewer) return;
+    setShotClock(seconds);
+    setTimerResetKey(k => k + 1);
+  };
 
   const shotUrgent = shotClock <= 5 && shotClock > 0;
 
+  const openDisplay = useCallback(() => {
+    try {
+      const features = 'toolbar=0,location=0,menubar=0,resizable=1,scrollbars=0,width=1280,height=720';
+      window.open('/display', 'scoreboard_display', features);
+      
+      setTimeout(() => {
+        try {
+          bcRef.current?.postMessage({
+            type: 'init',
+            state: { homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, tacticTokens, ballPos }
+          });
+        } catch (e) {}
+      }, 250);
+    } catch (e) {
+      // ignore
+    }
+  }, [homeScore, awayScore, period, gameTime, shotClock, homeFouls, awayFouls, homePlayers, awayPlayers, homeName, awayName]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="max-w-7xl mx-auto p-3 md:p-5 space-y-4">
+      <div className="max-w-screen-2xl mx-auto p-3 md:p-5 space-y-4">
+
+        {/* ── REALTIME ROLE BAR ── */}
+        <div className="flex flex-col gap-2 sm:gap-3 bg-slate-900/80 p-2.5 md:p-3 rounded-xl border border-slate-700/40 shadow-inner">
+          <div className="flex flex-col xs:flex-row gap-2 sm:gap-3 items-start sm:items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Connection:</span>
+              <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+                supabase && isSyncEnabled
+                  ? (syncStatus === 'SUBSCRIBED' ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500')
+                  : 'bg-red-500'
+              }`} />
+              <span className="text-[11px] text-slate-400 font-medium">
+                {supabase && isSyncEnabled
+                  ? `${syncStatus}`
+                  : !supabase
+                    ? 'Offline'
+                    : 'Sync Closed'}
+              </span>
+              <input
+                value={roomId}
+                onChange={e => setRoomId(e.target.value || 'default')}
+                placeholder="Room"
+                className="w-24 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 text-[11px]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMode('controller')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${
+                  mode === 'controller' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Smartphone size={13} /> Controller
+              </button>
+              <button
+                onClick={() => setMode('viewer')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-bold transition-all ${
+                  mode === 'viewer' ? 'bg-emerald-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Monitor size={13} /> Viewer
+              </button>
+              {supabase && (
+                <button
+                  onClick={() => setIsSyncEnabled(!isSyncEnabled)}
+                  className={`px-2.5 py-1.5 rounded text-[10px] font-bold uppercase transition-all active:scale-95 ${
+                    isSyncEnabled
+                      ? 'bg-red-900/40 text-red-300 border border-red-700/30 hover:bg-red-900/60'
+                      : 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 hover:bg-emerald-900/60'
+                  }`}
+                >
+                  {isSyncEnabled ? 'Close Sync' : 'Turn On Sync'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* ── CENTRAL APP NAVIGATION TABS ── */}
         <div className="flex border-b border-slate-700/50 bg-slate-800/40 p-1 rounded-xl">
           <button
             onClick={() => setView('scoreboard')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'scoreboard' ? 'bg-gradient-to-r from-amber-500 to-amber-650 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <LayoutDashboard size={16} /> Scoreboard & Rosters
@@ -332,7 +1311,7 @@ export const BasketballBoard: React.FC = () => {
           <button
             onClick={() => setView('court')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-slate-900 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
+              view === 'court' ? 'bg-gradient-to-r from-emerald-500 to-emerald-650 text-slate-950 shadow-md scale-[1.01]' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Move size={16} /> Full Tactical Court
@@ -350,39 +1329,78 @@ export const BasketballBoard: React.FC = () => {
                 <List size={16} className="text-amber-400" />
                 <span className="text-sm font-bold text-amber-400">Game Log</span>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={undoLast} disabled={gameEvents.length === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <Undo2 size={13} /> Undo Last
-                </button>
-                <button onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <FileText size={13} /> Scoresheet PDF
-                </button>
-                <button onClick={() => setShowEvents(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <List size={13} /> Events
-                </button>
-                <button onClick={resetGame}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <RotateCcw size={13} /> Reset
-                </button>
-                <button onClick={() => window.open('/court', '_blank')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
-                  <Move size={13} /> Open Tactical Page
-                </button>
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center gap-2">
+                  {!isViewer && (
+                    <button onClick={undoAnyLast} disabled={gameEvents.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                      <Undo2 size={13} /> Undo Last
+                    </button>
+                  )}
+                  <button onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700/90 hover:bg-violet-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <FileText size={13} /> Scoresheet PDF
+                  </button>
+                  <button onClick={() => setShowEvents(v => !v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <List size={13} /> Events
+                  </button>
+                  <button onClick={openDisplay}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700/90 hover:bg-blue-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                    <LayoutDashboard size={13} /> Display
+                  </button>
+                  {!isViewer && (
+                    <>
+                      <button onClick={resetGame}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                        <RotateCcw size={13} /> Reset
+                      </button>
+                      <button onClick={() => setView('court')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-all active:scale-95 shadow-md">
+                        <Move size={13} /> Open Tactical Page
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="sm:hidden relative">
+                  <button onClick={() => setShowMobileActions(s => !s)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-700/90 text-white text-sm font-semibold">
+                    Actions
+                  </button>
+                  {showMobileActions && (
+                    <div className="absolute right-0 mt-2 w-44 bg-slate-800 border border-slate-700 rounded shadow-lg z-30 p-2 space-y-2">
+                      {!isViewer && (
+                        <button onClick={undoAnyLast} disabled={gameEvents.length === 0}
+                          className="w-full text-left px-2 py-1 rounded bg-amber-700/80 text-white text-sm disabled:opacity-40">Undo Last</button>
+                      )}
+                      <button onClick={() => window.print()} className="w-full text-left px-2 py-1 rounded bg-violet-700/80 text-white text-sm">Scoresheet PDF</button>
+                      <button onClick={() => { setShowEvents(v => !v); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Events</button>
+                      
+                      <button onClick={() => { openDisplay(); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-blue-700/80 text-white text-sm">Display</button>
+
+                      {!isViewer && (
+                        <>
+                          <button onClick={resetGame} className="w-full text-left px-2 py-1 rounded bg-slate-700/80 text-white text-sm">Reset</button>
+                          <button onClick={() => { setView('court'); setShowMobileActions(false); }} className="w-full text-left px-2 py-1 rounded bg-emerald-700/80 text-white text-sm">Open Tactical Page</button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Scoreboard Banner */}
             <div className="relative overflow-hidden rounded-2xl shadow-2xl border border-slate-700/50">
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-900/20 via-slate-800 to-blue-900/20 pointer-events-none" />
-              <div className="relative grid grid-cols-3 gap-0">
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-950/20 via-slate-800 to-blue-900/20 pointer-events-none" />
+              <div className="relative grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {/* Home Team Display */}
-                <div className="flex flex-col items-center justify-center py-5 md:py-7 border-r border-slate-700/40 bg-gradient-to-b from-orange-950/30 to-transparent">
+                <div className="flex flex-col items-center justify-center py-3 sm:py-5 border-r border-slate-700/40 bg-gradient-to-b from-orange-950/30 to-transparent">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Trophy size={16} className="text-amber-500/80" />
-                    <h2 className="text-amber-400 text-base md:text-lg font-bold tracking-wider uppercase">Home</h2>
+                    <TeamNameEditor name={homeName} onSave={(n) => setHomeName(n)} disabled={isViewer}
+                      className="text-amber-400 text-base md:text-lg font-bold tracking-wider uppercase" />
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full opacity-50" />
@@ -390,69 +1408,119 @@ export const BasketballBoard: React.FC = () => {
                       {homeScore}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                    <span>Fouls:</span>
-                    <span className={`font-bold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
+                  <div className="mt-2 flex items-center gap-2 text-sm sm:text-base text-slate-400">
+                    <span className="text-sm sm:text-base">Fouls:</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${homeFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}>{homeFouls}</span>
                   </div>
+                  {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
+                      <button onClick={() => adjustTeamScore('home', -1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                      <button onClick={() => adjustTeamScore('home', 1)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                      <button onClick={() => adjustTeamScore('home', 2)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                      <button onClick={() => adjustTeamScore('home', 3)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                      <button onClick={() => adjustTeamFoul('home', 1)} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                      <button onClick={() => undoTeamManual('home')} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
+                    </div>}
                 </div>
 
                 {/* Clock Controllers */}
-                <div className="flex flex-col items-center gap-2.5 py-4 md:py-5 bg-slate-800/50">
+                <div className="col-span-2 sm:col-span-1 order-first sm:order-none flex flex-col items-center gap-2 py-3 sm:gap-2.5 sm:py-4 bg-slate-800/50">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest">Period</span>
-                    <button onClick={() => changePeriod(Math.max(1, period - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>
+                    {!isViewer && <button onClick={() => changePeriod(Math.max(1, period - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>}
                     <span className="text-lg font-black text-white tabular-nums min-w-[1.25rem] text-center">{period}</span>
-                    <button onClick={() => changePeriod(Math.min(9, period + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>
+                    {!isViewer && <button onClick={() => changePeriod(Math.min(9, period + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>}
                   </div>
 
                   <div className="text-center">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">Game Clock</span>
-                    <div className={`text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${gameTime <= 30 && gameTime > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
+                    <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${gameTime <= 30 && gameTime > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>
                       {formatTime(gameTime)}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1.5 justify-center">
-                      <input type="number" min="1" max="99" value={inputMins} onChange={e => setInputMins(e.target.value)}
-                        className="w-10 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
-                      <button onClick={handleSetTime} className="bg-slate-600 hover:bg-slate-500 text-white text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1">
-                        <Timer size={10} />Set
-                      </button>
-                    </div>
+                    {!isViewer && (
+                      <div className="flex items-center gap-1.5 mt-1.5 justify-center flex-wrap">
+                        <input type="text" inputMode="numeric" min="0" max="999" value={inputMins} onChange={e => setInputMins(e.target.value)}
+                          placeholder="m or m:ss"
+                          className="w-16 text-center bg-slate-700/80 border border-slate-600 rounded text-white text-xs py-0.5 focus:outline-none focus:border-amber-500" />
+                        <button onClick={handleSetTime} className="bg-slate-600 hover:bg-slate-500 text-white text-[10px] px-2 py-0.5 rounded transition-colors flex items-center gap-1">
+                          <Timer size={10} />Set
+                        </button>
+                        <div className="inline-flex rounded overflow-hidden border border-slate-700/50 ml-1">
+                          <button onClick={() => { setClockMode('countdown'); }}
+                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'countdown' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                            Countdown
+                          </button>
+                          <button onClick={() => { setClockMode('stopwatch'); }}
+                            className={`px-2 text-[10px] py-0.5 ${clockMode === 'stopwatch' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                            Stopwatch
+                          </button>
+                        </div>
+                        {timeoutMode ? (
+                          <button onClick={resumeFromTimeout} className="ml-2 bg-emerald-700/90 hover:bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                            Resume
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
 
                   <div className="w-3/4 border-t border-slate-700/50" />
 
                   <div className="text-center">
-                    <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">Shot Clock</span>
-                    <div className={`text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${
-                      shotClock === 0 ? 'text-red-500 animate-bounce' : shotUrgent ? 'text-red-400 animate-pulse' : 'text-rose-400'
-                    }`}>
-                      {shotClock}
+                    <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest block mb-0.5">{timeoutMode ? 'Timeout Duration' : 'Shot Clock'}</span>
+                    <div className={`text-2xl sm:text-3xl md:text-4xl font-mono font-black tabular-nums select-none ${timeoutMode ? 'text-amber-400' : shotClock === 0 ? 'text-red-500 animate-bounce' : shotUrgent ? 'text-red-400 animate-pulse' : 'text-rose-400'}`}>
+                      {timeoutMode ? formatTime(timeoutRemaining) : shotClock}
                     </div>
-                    <div className="flex gap-1.5 mt-1.5 justify-center">
-                      <button onClick={() => setShotClock(24)}
-                        className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
-                        <RefreshCw size={9} />24s
-                      </button>
-                      <button onClick={() => setShotClock(14)}
-                        className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
-                        <RefreshCw size={9} />14s
-                      </button>
-                    </div>
+                    {!isViewer && (
+                      <div className="flex gap-1 mt-1.5 justify-center flex-wrap">
+                        {timeoutMode ? (
+                          <>
+                            <button onClick={() => startTimeout(30)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">30s</button>
+                            <button onClick={() => startTimeout(60)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">1m</button>
+                            <button onClick={() => startTimeout(180)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">3m</button>
+                            <button onClick={() => startTimeout(300)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">5m</button>
+                            <button onClick={() => startTimeout(600)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">10m</button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => handleResetShotClock(24)}
+                              className="flex items-center gap-1 bg-rose-700/90 hover:bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                              <RefreshCw size={9} />24s
+                            </button>
+                            <button onClick={() => handleResetShotClock(14)}
+                              className="flex items-center gap-1 bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow transition-all active:scale-95">
+                              <RefreshCw size={9} />14s
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  <button onClick={() => setIsRunning(!isRunning)}
-                    className={`w-full max-w-[200px] py-2 rounded-xl font-bold transition-all text-xs shadow-lg active:scale-[0.98] flex items-center justify-center gap-1.5 ${
-                      isRunning ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white' : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
-                    }`}>
-                    {isRunning ? <><Pause size={14} />Pause Clock</> : <><Play size={14} />Start Clock</>}
-                  </button>
+                  {!isViewer && (
+                    <button onClick={() => setIsRunning(!isRunning)}
+                      className={`w-full max-w-[200px] py-2 rounded-xl font-bold transition-all text-xs shadow-lg active:scale-[0.98] flex items-center justify-center gap-1.5 ${
+                        isRunning ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white' : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white'
+                      }`}>
+                      {isRunning ? <><Pause size={14} />Pause Clock</> : <><Play size={14} />Start Clock</>}
+                    </button>
+                  )}
+                  {!isViewer && !timeoutMode && (
+                    <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                      <button onClick={() => startTimeout(30)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">30s</button>
+                      <button onClick={() => startTimeout(60)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">1m</button>
+                      <button onClick={() => startTimeout(180)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">3m</button>
+                      <button onClick={() => startTimeout(300)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">5m</button>
+                      <button onClick={() => startTimeout(600)} className="bg-amber-700/90 hover:bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow transition-all active:scale-95">10m</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Away Team Display */}
                 <div className="flex flex-col items-center justify-center py-5 md:py-7 border-l border-slate-700/40 bg-gradient-to-b from-blue-950/30 to-transparent">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Trophy size={16} className="text-sky-500/80" />
-                    <h2 className="text-sky-400 text-base md:text-lg font-bold tracking-wider uppercase">Away</h2>
+                    <TeamNameEditor name={awayName} onSave={(n) => setAwayName(n)} disabled={isViewer}
+                      className="text-sky-400 text-base md:text-lg font-bold tracking-wider uppercase" />
                   </div>
                   <div className="relative">
                     <div className="absolute inset-0 bg-sky-500/20 blur-2xl rounded-full opacity-50" />
@@ -460,34 +1528,129 @@ export const BasketballBoard: React.FC = () => {
                       {awayScore}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                    <span>Fouls:</span>
-                    <span className={`font-bold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
+                  <div className="mt-2 flex items-center gap-2 text-base md:text-lg text-slate-400">
+                    <span className="text-base md:text-lg">Fouls:</span>
+                    <span className={`ml-2 text-xl sm:text-2xl md:text-4xl font-extrabold ${awayFouls >= 5 ? 'text-red-400 animate-pulse' : 'text-sky-400'}`}>{awayFouls}</span>
                   </div>
+                  {!isViewer && <div className="mt-3 flex flex-wrap items-start gap-2">
+                      <button onClick={() => adjustTeamScore('away', -1)} className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition-colors active:scale-95">-1</button>
+                      <button onClick={() => adjustTeamScore('away', 1)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+1</button>
+                      <button onClick={() => adjustTeamScore('away', 2)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+2</button>
+                      <button onClick={() => adjustTeamScore('away', 3)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">+3</button>
+                      <button onClick={() => adjustTeamFoul('away', 1)} className="px-3 py-1.5 rounded-lg bg-sky-700/90 hover:bg-sky-600 text-white text-sm font-bold transition-colors active:scale-95">F</button>
+                      <button onClick={() => undoTeamManual('away')} className="px-3 py-1.5 rounded-lg bg-amber-700/90 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-all active:scale-95">Undo</button>
+                    </div>}
                 </div>
               </div>
             </div>
 
-            {/* Roster Panels (Equipped with Dual Drag + Instant Swap system) */}
+            {/* Player Pool */}
+            <div className="rounded-2xl border-2 border-slate-700/60 bg-slate-800/30 shadow-xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-700/40 flex items-center justify-between bg-slate-800/60">
+                <div className="flex items-center gap-2">
+                  <Users size={15} className="text-slate-400" />
+                  <h3 className="text-base font-bold text-slate-200">Player Pool</h3>
+                </div>
+                {poolPlayers.length > 0 && (
+                  <button onClick={() => setPoolPlayers([])} className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
+                    <Trash2 size={10} /> Clear
+                  </button>
+                )}
+              </div>
+              <div className="p-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    value={poolName}
+                    onChange={e => setPoolName(e.target.value)}
+                    placeholder="Name"
+                    className="flex-1 bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-slate-500"
+                  />
+                  <input
+                    type="number"
+                    value={poolNumber}
+                    onChange={e => setPoolNumber(parseInt(e.target.value || '0'))}
+                    placeholder="#"
+                    className="w-14 bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-slate-500"
+                  />
+                  <button
+                    onClick={addPoolPlayer}
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm px-3 py-1 rounded-lg transition-colors">
+                    Add
+                  </button>
+                </div>
+                {poolPlayers.length === 0 ? (
+                  <div className="text-center text-[11px] text-slate-600 italic">No players in pool</div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                    {poolPlayers.map(player => (
+                      <div key={player.id}
+                        draggable
+                        onDragStart={e => handlePoolDragStart(e, player.id)}
+                        onDragEnd={() => setDraggedId(null)}
+                        className="relative group p-1 rounded-lg border border-slate-700/40 bg-slate-800/20 flex flex-col items-center cursor-grab active:cursor-grabbing transition-all hover:scale-105 hover:border-slate-600/60">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPoolPlayers(prev => prev.filter(p => p.id !== player.id)); setDraggedId(null); }}
+                          className="absolute -top-1.5 -right-1.5 rounded-full bg-slate-700 text-slate-300 hover:text-white hover:bg-red-900/70 border border-slate-600/60 shadow-sm transition-colors w-5 h-5 flex items-center justify-center leading-none"
+                          title="Remove">
+                          ✕
+                        </button>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 font-bold text-[10px] bg-slate-700/60 mb-0.5">
+                          <InlineNumber num={player.number} onSave={() => {}} className="text-[11px]" compact disabled />
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate max-w-[54px] leading-tight">{player.name}</div>
+                        <div className="flex gap-1 mt-1">
+                          <button onClick={() => movePoolPlayerToTeam(player.id, 'home')} className="text-[9px] px-1.5 py-0.5 rounded bg-orange-700/80 text-white">H</button>
+                          <button onClick={() => movePoolPlayerToTeam(player.id, 'away')} className="text-[9px] px-1.5 py-0.5 rounded bg-sky-700/80 text-white">A</button>
+                        </div>
+                        </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Roster Panels */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <RosterPanel team="home" players={homePlayers}
+              <RosterPanel team="home" teamName={homeName} players={homePlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
+                onChangeNumber={changePlayerNumber}
                 draggedId={draggedId} dropTargetId={dropTargetId}
                 onDragStart={handleRosterDragStart} onDrop={handleRosterDrop}
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} />
-              <RosterPanel team="away" players={awayPlayers}
+                onBenchClick={handleBenchClick} isViewer={isViewer}
+                onClear={() => {
+                  setPoolPlayers(prev => [...prev, ...homePlayers.map(p => ({ ...p, status: 'pool' as const }))]);
+                  setHomePlayers([]);
+                }}
+                onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'home')}
+                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'home')}
+                onCourtGridDrop={e => handleCourtGridDrop(e, 'home')}
+                onUndoLast={undoLast}
+                gameEvents={gameEvents}
+                onRemovePlayer={removePlayer} />
+              <RosterPanel team="away" teamName={awayName} players={awayPlayers}
                 onAddPoints={addPoints} onAddFoul={addFoul}
                 onRename={renamePlayer}
+                onChangeNumber={changePlayerNumber}
                 draggedId={draggedId} dropTargetId={dropTargetId}
                 onDragStart={handleRosterDragStart} onDrop={handleRosterDrop}
                 onDragOver={(e, id) => { e.preventDefault(); setDropTargetId(id); }}
                 onDragLeave={() => setDropTargetId(null)}
                 selectedCourtId={selectedCourtId} onSelectCourt={handleSelectCourt}
-                onBenchClick={handleBenchClick} />
+                onBenchClick={handleBenchClick} isViewer={isViewer}
+                onClear={() => {
+                  setPoolPlayers(prev => [...prev, ...awayPlayers.map(p => ({ ...p, status: 'pool' as const }))]);
+                  setAwayPlayers([]);
+                }}
+                onEmptyCourtDrop={e => handleEmptyCourtDrop(e, 'away')}
+                onEmptyBenchDrop={e => handleEmptyBenchDrop(e, 'away')}
+                onCourtGridDrop={e => handleCourtGridDrop(e, 'away')}
+                onUndoLast={undoLast}
+                gameEvents={gameEvents}
+                onRemovePlayer={removePlayer} />
             </div>
 
             {/* Scoresheet Table */}
@@ -497,46 +1660,56 @@ export const BasketballBoard: React.FC = () => {
                 <p className="text-center text-[10px] text-slate-500 mt-0.5">{new Date().toLocaleDateString()}</p>
                 <div className="flex items-center justify-center gap-4 mt-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Home</span>
+                    <span className="text-xs text-slate-400 uppercase tracking-wider">{homeName}</span>
                     <span className="text-2xl font-black text-orange-400 tabular-nums">{homeScore}</span>
                   </div>
                   <span className="text-slate-600 font-bold text-sm">VS</span>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-black text-sky-400 tabular-nums">{awayScore}</span>
-                    <span className="text-xs text-slate-400 uppercase tracking-wider">Away</span>
+                    <span className="text-xs text-slate-400 uppercase tracking-wider">{awayName}</span>
                   </div>
+                </div>
+                <div className="flex items-center justify-center mt-2">
+                  <button onClick={() => setShowDebug(d => !d)} className="text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded">{showDebug ? 'Hide' : 'Show'} Debug</button>
                 </div>
               </div>
 
               <div className="p-4">
-                <div className="text-[10px] text-slate-500 mb-2 text-center">Points 1–{maxSheetRows} &nbsp;|&nbsp; Player numbers appear at the cumulative score when they scored</div>
-                <div className="overflow-x-auto">
-                  <table className="mx-auto border-collapse text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Point sequence 1–{maxSheetRows}</div>
+                  <button className="sm:hidden text-xs text-amber-300 underline" onClick={() => setShowScoresheetMobile(s => !s)}>{showScoresheetMobile ? 'Hide Scoresheet' : 'Show Scoresheet'}</button>
+                </div>
+                <div className={`${showScoresheetMobile ? 'block' : 'hidden sm:block'} overflow-x-auto`}>
+                  <table className="mx-auto w-full text-sm border-collapse">
                     <thead>
                       <tr>
-                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-16 text-center">Home</th>
+                        <th className="bg-orange-900/40 text-amber-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">{homeName}</th>
                         <th className="bg-slate-700/60 text-slate-300 border border-slate-600 px-3 py-1.5 font-bold w-14 text-center">Score</th>
-                        <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-16 text-center">Away</th>
+                        <th className="bg-blue-900/40 text-sky-400 border border-slate-600 px-3 py-1.5 font-bold w-20 text-center">{awayName}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {Array.from({ length: maxSheetRows }, (_, i) => i + 1).map(n => (
-                        <tr key={n} className={n % 2 === 0 ? 'bg-slate-800/30' : ''}>
-                          <td className="border border-slate-700/50 px-3 py-0.5 text-center">
-                            {scoresheetMap.home[n] !== undefined
-                              ? <span className="font-black text-amber-400 text-sm">{scoresheetMap.home[n]}</span>
-                              : <span className="text-slate-700">—</span>}
-                          </td>
-                          <td className="border border-slate-600 px-3 py-0.5 text-center bg-slate-700/30">
-                            <span className="font-bold text-slate-300 tabular-nums">{n}</span>
-                          </td>
-                          <td className="border border-slate-700/50 px-3 py-0.5 text-center">
-                            {scoresheetMap.away[n] !== undefined
-                              ? <span className="font-black text-sky-400 text-sm">{scoresheetMap.away[n]}</span>
-                              : <span className="text-slate-700">—</span>}
-                          </td>
-                        </tr>
-                      ))}
+                      {Array.from({ length: maxSheetRows }, (_, i) => i + 1).map(n => {
+                        const homeEntry = scoresheetMap.home[n];
+                        const awayEntry = scoresheetMap.away[n];
+                        return (
+                          <tr key={n} className={n % 2 === 0 ? 'bg-slate-800/30' : ''}>
+                            <td className="border border-slate-700/50 px-3 py-0.5 text-center">
+                              {homeEntry !== undefined
+                                ? <span className="font-black text-amber-400 text-sm">#{homeEntry.playerNumber} <span className="text-sm font-medium">{homeEntry.playerName}</span></span>
+                                : <span className="text-slate-700">—</span>}
+                            </td>
+                            <td className="border border-slate-600 px-3 py-0.5 text-center bg-slate-700/30">
+                              <span className="font-bold text-slate-300 tabular-nums">{n}</span>
+                            </td>
+                            <td className="border border-slate-700/50 px-3 py-0.5 text-center">
+                              {awayEntry !== undefined
+                                ? <span className="font-black text-sky-400 text-sm">#{awayEntry.playerNumber} <span className="text-sm font-medium">{awayEntry.playerName}</span></span>
+                                : <span className="text-slate-700">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -544,33 +1717,44 @@ export const BasketballBoard: React.FC = () => {
                 {/* Score stats footer */}
                 <div className="mt-4 flex flex-col sm:flex-row gap-3 border-t border-slate-700/40 pt-3">
                   <div className="flex-1">
-                    <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Home Players</div>
-                    <div className="flex flex-wrap gap-2">
-                      {homePlayers.filter(p => p.points > 0).map(p => (
-                        <span key={p.id} className="text-[10px] bg-orange-900/30 border border-orange-700/40 px-2 py-0.5 rounded text-amber-300">
-                          #{p.number} {p.name} — {p.points}pts
-                        </span>
-                      ))}
-                      {homePlayers.filter(p => p.points > 0).length === 0 && <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+                    <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">Top Scorers — Home</div>
+                    <div className="flex flex-col gap-1">
+                      {homeScorers.length > 0 ? homeScorers.map((p, i) => (
+                          <div key={p.id} className="flex items-center gap-2 text-[12px] bg-orange-950/10 border border-orange-700/20 px-2 py-1 rounded">
+                            <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
+                            <span className="text-sm text-amber-200 truncate">#{p.number} {p.name}</span>
+                            <span className="ml-auto font-bold text-amber-300">{p.points} pts</span>
+                          </div>
+                      )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
                   </div>
                   <div className="flex-1">
-                    <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Away Players</div>
-                    <div className="flex flex-wrap gap-2">
-                      {awayPlayers.filter(p => p.points > 0).map(p => (
-                        <span key={p.id} className="text-[10px] bg-blue-900/30 border border-blue-700/40 px-2 py-0.5 rounded text-sky-300">
-                          #{p.number} {p.name} — {p.points}pts
-                        </span>
-                      ))}
-                      {awayPlayers.filter(p => p.points > 0).length === 0 && <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+                    <div className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest mb-1.5">Top Scorers — Away</div>
+                    <div className="flex flex-col gap-1">
+                      {awayScorers.length > 0 ? awayScorers.map((p, i) => (
+                          <div key={p.id} className="flex items-center gap-3 text-[12px] bg-blue-900/10 border border-blue-700/20 px-2.5 py-1 rounded">
+                            <span className="w-4 text-xs text-slate-400">{i + 1}.</span>
+                            <span className="text-sm text-sky-200 truncate">#{p.number} {p.name}</span>
+                            <span className="ml-auto font-bold text-sky-350">{p.points} pts</span>
+                          </div>
+                      )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
                     </div>
                   </div>
                 </div>
                 <p className="text-center text-[10px] text-slate-600 italic mt-2">Player numbers appear at the cumulative score when they scored.</p>
               </div>
+              
+              {showDebug && (
+                <div className="mt-3 p-3 bg-slate-900/70 rounded text-xs overflow-auto max-h-64 hidden sm:block">
+                  <div className="text-[11px] font-bold text-slate-300 mb-2">Debug — gameEvents</div>
+                  <pre className="text-[11px] text-slate-200 whitespace-pre-wrap mb-3">{JSON.stringify(gameEvents, null, 2)}</pre>
+                  <div className="text-[11px] font-bold text-slate-300 mb-2">Derived scoresheetMap</div>
+                  <pre className="text-[11px] text-slate-200 whitespace-pre-wrap">{JSON.stringify(scoresheetMap, null, 2)}</pre>
+                </div>
+              )}
             </div>
 
-            {/* Events Log (Optional toggle) */}
+            {/* Events Log */}
             {showEvents && (
               <div className="rounded-2xl border border-slate-700/50 bg-slate-800/50 shadow-xl p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -583,11 +1767,11 @@ export const BasketballBoard: React.FC = () => {
                       {[...gameEvents].reverse().map(ev => (
                         <div key={ev.id} className="flex items-center gap-3 text-[11px] py-1 border-b border-slate-700/30">
                           <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${ev.team === 'home' ? 'bg-orange-900/40 text-amber-400' : 'bg-blue-900/40 text-sky-400'}`}>
-                            {ev.team === 'home' ? 'HOME' : 'AWAY'}
+                            {(ev.team === 'home' ? homeName : awayName).toUpperCase()}
                           </span>
-                          <span className="text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
+                          <span className="text-sm text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
                           <span className={ev.type === 'score' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                            {ev.type === 'score' ? `+${ev.value} pts` : `${ev.value > 0 ? '+' : ''}${ev.value} foul`}
+                            {ev.type === 'score' ? `+${ev.value} pts` : `+${ev.value} foul`}
                           </span>
                           <span className="text-slate-600 ml-auto">{ev.homeScoreBefore + (ev.team === 'home' && ev.type === 'score' ? ev.value : 0)} – {ev.awayScoreBefore + (ev.team === 'away' && ev.type === 'score' ? ev.value : 0)}</span>
                         </div>
@@ -598,7 +1782,7 @@ export const BasketballBoard: React.FC = () => {
             )}
 
             {/* Quick Guide */}
-            <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-4">
+            <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-4 hidden sm:block">
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Quick Guide</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
@@ -618,90 +1802,444 @@ export const BasketballBoard: React.FC = () => {
         )}
 
         {/* ==========================================
-            VIEW 2: FULL TACTICAL COURT (NEW SEPARATE VIEW) [1]
+            VIEW 2: FULL TACTICAL COURT (AUTO-ROTATING VIEW)
            ========================================== */}
         {view === 'court' && (
           <div className="space-y-4">
             
-            {/* COMPACT FLOATING SCOREBAR ON TOP OF TACTICAL COURT [1] */}
-            <div className="grid grid-cols-3 gap-2 items-center bg-slate-800/80 border border-slate-700/50 rounded-xl p-3 shadow-lg select-none">
+            {/* COMPACT FLOATING SCOREBAR */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-1 sm:gap-2 items-center bg-slate-800/80 border border-slate-700/50 rounded-xl p-2 sm:p-3 shadow-lg select-none">
+              
               {/* Home Team Mini Score */}
-              <div className="flex items-center gap-3 justify-start pl-4">
-                <span className="text-sm font-bold text-amber-400 uppercase tracking-wider">Home</span>
-                <span className="text-3xl font-black text-orange-500">{homeScore}</span>
-                <span className="text-xs text-slate-400">(Fouls: {homeFouls})</span>
+              <div className="flex items-center gap-1.5 sm:gap-3 justify-start pl-1 sm:pl-4">
+                <span className="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">{homeName}</span>
+                <span className="text-xl sm:text-3xl font-black text-orange-500">{homeScore}</span>
+                <span className="text-[10px] sm:text-sm text-slate-400 truncate">
+                  (F: <span className="font-extrabold text-sm sm:text-xl text-amber-500">{homeFouls}</span>)
+                </span>
               </div>
               
-              {/* Game Timers */}
-              <div className="text-center flex flex-col items-center">
-                <div className="text-2xl font-mono font-black text-emerald-400 leading-none mb-1">
+              {/* Game Timers (Spans full width on mobile, 1 column on tablet+) */}
+              <div className="col-span-2 sm:col-span-1 order-last sm:order-none text-center flex flex-col items-center border-t border-slate-700/30 pt-1.5 sm:pt-0 sm:border-t-0">
+                <div className="text-xl sm:text-2xl font-mono font-black text-emerald-400 leading-none mb-1">
                   {formatTime(gameTime)}
                 </div>
-                <div className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs">
                   <span className="text-slate-500">Period: <b className="text-slate-300 font-bold">{period}</b></span>
                   <span className="text-slate-500">|</span>
-                  <span className={`font-mono font-bold ${shotUrgent ? 'text-red-400' : 'text-slate-300'}`}>Shot Clock: {shotClock}s</span>
+                  <span className={`font-mono font-bold ${shotUrgent ? 'text-red-400 animate-pulse' : 'text-slate-300'}`}>
+                    Shot: {shotClock}s
+                  </span>
                 </div>
               </div>
 
               {/* Away Team Mini Score */}
-              <div className="flex items-center gap-3 justify-end pr-4">
-                <span className="text-xs text-slate-400">(Fouls: {awayFouls})</span>
-                <span className="text-3xl font-black text-blue-500">{awayScore}</span>
-                <span className="text-sm font-bold text-sky-400 uppercase tracking-wider">Away</span>
+              <div className="flex items-center gap-1.5 sm:gap-3 justify-end pr-1 sm:pr-4">
+                <span className="text-[10px] sm:text-sm text-slate-400 truncate">
+                  (F: <span className="font-extrabold text-sm sm:text-xl text-sky-400">{awayFouls}</span>)
+                </span>
+                <span className="text-xl sm:text-3xl font-black text-blue-500">{awayScore}</span>
+                <span className="text-xs sm:text-sm font-bold text-sky-400 uppercase tracking-wider">{awayName}</span>
               </div>
             </div>
 
-            {/* FULL COURTBOARD DIAGRAM WITH Sideline & Baseline Margins [3] */}
-            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4">
-              <div ref={courtRef}
-                onPointerMove={handleCourtPointerMove}
-                onPointerUp={handleCourtPointerUp}
-                onPointerLeave={handleCourtPointerUp}
-                // Custom out-of-bounds padding allows tokens to drag past the lines [3]
-                className="relative aspect-[28/17] w-full rounded-xl overflow-hidden select-none border-2 border-amber-700/60 shadow-inner cursor-crosshair bg-[#bc5a10]"
-              >
-                {/* Court Inset Boundary Lines (Outer box is inset by 8% to create off-court space) [3] */}
-                <div className="absolute inset-x-[8%] inset-y-[8%] border-2 border-white/50 pointer-events-none">
-                  {/* Top & Bottom baselines (visible edges) */}
-                  <div className="absolute left-0 right-0 h-px bg-white/60 top-0" />
-                  <div className="absolute left-0 right-0 h-px bg-white/60 bottom-0" />
-                  {/* Half-court center dividing line */}
-                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-white/40" />
-                  {/* Center circle */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[16%] aspect-square border-2 border-white/40 rounded-full" />
-                  {/* Left Paint key and free throw area */}
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-[38%] w-[16%] border-y-2 border-r-2 border-white/40" />
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 h-[22%] w-[8%] border-y border-r border-white/20" />
-                  {/* Right Paint key and free throw area */}
-                  <div className="absolute top-1/2 right-0 -translate-y-1/2 h-[38%] w-[16%] border-y-2 border-l-2 border-white/40" />
-                  <div className="absolute top-1/2 right-0 -translate-y-1/2 h-[22%] w-[8%] border-y border-l border-white/20" />
-                  {/* Left Three-point line arc */}
-                  <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[22%] h-[80%] border-r-2 border-white/25 rounded-r-full" />
-                  {/* Right Three-point line arc */}
-                  <div className="absolute top-1/2 right-0 -translate-y-1/2 w-[22%] h-[80%] border-l-2 border-white/25 rounded-l-full" />
-                </div>
+            {/* ACTION ROW */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <Info size={14} className="text-amber-400" />
+                <span>💡 Drag any player token to move them individually. To move multiple players, touch them simultaneously on mobile.</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDiagramLabels(prev => !prev)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow ${
+                    showDiagramLabels 
+                      ? 'bg-amber-500 text-slate-900 border-amber-400' 
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750'
+                  }`}
+                >
+                  {showDiagramLabels ? 'Hide Court Labels' : 'Show Court Labels'}
+                </button>
+              </div>
+            </div>
 
-                {/* Tactical Tokens for Court Active Players */}
-                {[...homePlayers.filter(p => p.status === 'court'), ...awayPlayers.filter(p => p.status === 'court')].map(player => (
-                  <div key={player.id}
-                    onPointerDown={e => handleCourtPointerDown(e, player.id)}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 cursor-grab active:cursor-grabbing ${courtDragId === player.id ? 'z-20 scale-110' : ''}`}
-                    style={{ left: `${player.x}%`, top: `${player.y}%`, transition: courtDragId === player.id ? 'none' : 'transform 0.1s' }}>
-                    <div className={`w-8.5 h-9 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs ${
-                      player.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                    } ${courtDragId === player.id ? 'ring-2 ring-yellow-400' : ''}`}>
-                      {player.number}
-                    </div>
-                    <span className="text-[9px] bg-black/85 px-1.5 py-0.5 rounded text-white mt-0.5 leading-none max-w-[64px] truncate">
-                      {player.name}
-                    </span>
-                  </div>
-                ))}
+            {/* DIAGRAM COURT AND CONTROLS CARD */}
+            <div className="rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl bg-slate-800/50 p-4 flex flex-col items-center gap-4">
+              
+              {/* TOOLBAR CONTROL PANEL (OUTSIDE THE COURT WORKSPACE) [1] */}
+              {!isViewer && (
+                <div className="flex flex-row flex-wrap items-center justify-center gap-2 p-1.5 bg-slate-900/95 border border-slate-700/50 rounded-xl shadow-lg select-none">
+                  <button
+                    onClick={() => setActiveTool('move')}
+                    title="Move Players"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'move' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Move size={15} /> Move
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTool('draw')}
+                    title="Draw Lines"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'draw' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Pencil size={15} /> Draw
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTool('erase')}
+                    title="Eraser"
+                    className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold ${
+                      activeTool === 'erase' ? 'bg-amber-500 text-slate-900' : 'text-slate-400 hover:bg-slate-800'
+                    }`}
+                  >
+                    <Eraser size={15} /> Eraser
+                  </button>
+
+                  <div className="border-l h-6 mx-1 border-slate-700/50" />
+
+                  <button
+                    onClick={() => {
+                      setDrawings([]);
+                      setCurrentDrawingPoints([]);
+                    }}
+                    title="Clear All Drawings"
+                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+
+                  <div className="border-l h-6 mx-1 border-slate-700/50" />
+
+                  <button
+                    onClick={() => {
+                      setTacticTokens([...DEFAULT_TACTIC_TOKENS]);
+                      setBallPos({ ...DEFAULT_BALL_POS });
+                    }}
+                    title="Reset court positions (players + ball)"
+                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-amber-400 transition-colors flex items-center gap-1 text-xs font-bold"
+                  >
+                    <RotateCcw size={15} /> Reset court
+                  </button>
+
+                  {activeTool === 'draw' && (
+                    <>
+                      <div className="border-l h-6 mx-1 border-slate-700/50" />
+                      <div className="flex items-center gap-1.5 flex-row px-1">
+                        {[
+                          ['#ff4444', 'bg-red-500'],
+                          ['#3b82f6', 'bg-blue-500'],
+                          ['#ffffff', 'bg-white border border-slate-600']
+                        ].map(([colorCode, bgClass]) => (
+                          <button
+                            key={colorCode}
+                            onClick={() => setStrokeColor(colorCode)}
+                            className={`w-3.5 h-3.5 rounded-full ${bgClass} transition-transform ${
+                              strokeColor === colorCode ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100 hover:scale-110'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* DIAGRAM PANEL */}
+              <div className="w-full relative">
+                <div ref={courtRef}
+                  onPointerDown={handleCourtBgPointerDown}
+                  onPointerMove={handleCourtBgPointerMove}
+                  onPointerUp={handleCourtBgPointerUp}
+                  onPointerCancel={handleCourtBgPointerUp}
+                  className={`relative w-full rounded-xl overflow-hidden select-none border-2 border-slate-700 shadow-2xl cursor-crosshair bg-slate-900 ${
+                    isVerticalView 
+                      ? 'aspect-[38/58] max-w-[420px] mx-auto' 
+                      : 'min-w-[560px] md:min-w-0 aspect-[58/38]'
+                  } ${courtDragId || isDrawing || activeTool !== 'move' ? 'touch-none' : 'touch-auto'}`}
+                  style={{ backgroundColor: '#fdd2ab' }}
+                >
+                  
+                  {isVerticalView ? (
+                    // ==================================================
+                    // 1. VERTICAL VIEW SVG (ViewBox: 380 x 580) [1]
+                    // ==================================================
+                    <svg viewBox="0 0 380 580" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                      <rect x="0" y="0" width="380" height="510" fill="#fdd2ab" />
+                      <rect x="0" y="510" width="380" height="70" fill="#dfd0c0" />
+                      <rect x="140" y="10" width="100" height="100" fill="#f2913f" />
+                      <rect x="140" y="410" width="100" height="100" fill="#f2913f" />
+                      
+                      {/* Court Boundary Lines (Thicker stroke) */}
+                      <rect x="50" y="10" width="280" height="500" fill="none" stroke="white" strokeWidth="3.5" />
+                      <line x1="50" y1="260" x2="330" y2="260" stroke="white" strokeWidth="3.5" />
+                      
+                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                      <circle cx="190" cy="260" r="28" fill="none" stroke="white" strokeWidth="3" />
+                      <circle cx="190" cy="260" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
+
+                      {/* TOP BASKET ZONE (Thicker stroke, wider corner three-point area) [1] */}
+                      <line x1="140" y1="110" x2="240" y2="110" stroke="white" strokeWidth="3.5" />
+                      <path d="M 170,29 A 20,20 0 0,0 210,29" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 140,110 A 50,50 0 0,0 240,110" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 140,110 A 50,50 0 0,1 240,110" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 75,10 L 75,80 A 115,115 0 0,0 305,80 L 305,10" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="160" y1="22" x2="220" y2="22" stroke="white" strokeWidth="4" />
+                      <line x1="190" y1="10" x2="190" y2="22" stroke="white" strokeWidth="2" />
+                      <circle cx="190" cy="29" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      {/* BOTTOM BASKET ZONE (Thicker lines, wider corner three-point area) [1] */}
+                      <line x1="140" y1="410" x2="240" y2="410" stroke="white" strokeWidth="2.5" />
+                      <path d="M 170,491 A 20,20 0 0,1 210,491" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="2.2,2.2" />
+                      <path d="M 140,410 A 50,50 0 0,1 240,410" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 140,410 A 50,50 0 0,0 240,410" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 75,510 L 75,440 A 115,115 0 0,1 305,440 L 305,510" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="160" y1="498" x2="220" y2="498" stroke="white" strokeWidth="4" />
+                      <line x1="190" y1="510" x2="190" y2="498" stroke="white" strokeWidth="2" />
+                      <circle cx="190" cy="491" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      {/* Hashmarks */}
+                      <line x1="50" y1="170" x2="60" y2="170" stroke="white" strokeWidth="2" />
+                      <line x1="50" y1="350" x2="60" y2="350" stroke="white" strokeWidth="2" />
+                      <line x1="320" y1="170" x2="330" y2="170" stroke="white" strokeWidth="2" />
+                      <line x1="320" y1="350" x2="330" y2="350" stroke="white" strokeWidth="2" />
+
+                      {/* Bench Graphic Outlines */}
+                      <rect x="20" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="150" y="525" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="250" y="525" width="110" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+
+                      <text x="75" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+                      <text x="190" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Sub Box</text>
+                      <text x="305" y="548" fill="#4d3b2b" opacity="0.15" fontSize="8" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Bench</text>
+
+                      {/* Render drawings projected vertically */}
+                      {drawings.map(drawing => (
+                        <polyline
+                          key={drawing.id}
+                          points={projectDrawings(drawing.points, true)}
+                          fill="none"
+                          stroke={drawing.color}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      ))}
+
+                      {currentDrawingPoints.length > 1 && (
+                        <polyline
+                          points={projectDrawings(currentDrawingPoints, true)}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      )}
+
+                      {/* Vertical Labels */}
+                      {showDiagramLabels && (
+                        <g className="transition-opacity duration-300 opacity-95">
+                          <style>{`
+                            .diag-lbl { font-family: sans-serif; font-size: 9px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                          `}</style>
+                          <text x="65" y="25" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="315" y="25" className="diag-lbl" textAnchor="end">Corner</text>
+                          <text x="65" y="495" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="315" y="495" className="diag-lbl" textAnchor="end">Corner</text>
+                          
+                          <text x="140" y="125" className="diag-lbl" textAnchor="end">Elbow</text>
+                          <text x="240" y="125" className="diag-lbl" textAnchor="start">Elbow</text>
+                          <text x="140" y="395" className="diag-lbl" textAnchor="end">Elbow</text>
+                          <text x="240" y="395" className="diag-lbl" textAnchor="start">Elbow</text>
+                          
+                          <text x="190" y="70" className="diag-lbl" textAnchor="middle">Painted Area</text>
+                          <text x="190" y="455" className="diag-lbl" textAnchor="middle">Painted Area</text>
+
+                          <text x="190" y="170" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          <text x="190" y="350" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          
+                          <text x="190" y="270" className="diag-lbl" textAnchor="middle">Center Circle</text>
+                          <text x="190" y="250" className="diag-lbl" textAnchor="middle">Half-Court Line</text>
+                          <text x="45" y="260" className="diag-lbl" textAnchor="middle" transform="rotate(-90 45 260)">Sideline</text>
+                          <text x="190" y="505" className="diag-lbl" textAnchor="middle">Baseline</text>
+                        </g>
+                      )}
+                    </svg>
+                  ) : (
+                    // ==================================================
+                    // 2. HORIZONTAL VIEW SVG (ViewBox: 580 x 380) [1]
+                    // ==================================================
+                    <svg viewBox="0 0 580 380" className="w-full h-full absolute inset-0 pointer-events-none select-none">
+                      <rect x="0" y="0" width="580" height="310" fill="#fdd2ab" />
+                      <rect x="0" y="310" width="580" height="70" fill="#dfd0c0" />
+                      <rect x="40" y="120" width="105" height="100" fill="#f2913f" />
+                      <rect x="435" y="120" width="105" height="100" fill="#f2913f" />
+
+                      {/* Outer Court Lines (Thicker stroke) */}
+                      <rect x="40" y="30" width="500" height="280" fill="none" stroke="white" strokeWidth="3.5" />
+                      <line x1="290" y1="30" x2="290" y2="310" stroke="white" strokeWidth="3.5" />
+                      
+                      {/* Center Circles (Thicker stroke, smaller center court circle radius) [1] */}
+                      <circle cx="290" cy="170" r="28" fill="none" stroke="white" strokeWidth="3" />
+                      <circle cx="290" cy="170" r="7" fill="none" stroke="white" strokeWidth="1.8" strokeDasharray="2.5,2.5" />
+
+                      {/* Basket area lines (Wider corner three-point area) [1] */}
+                      <line x1="145" y1="120" x2="145" y2="220" stroke="white" strokeWidth="3.5" />
+                      <path d="M 59,150 A 20,20 0 0,1 59,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 145,120 A 50,50 0 0,1 145,220" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 145,120 A 50,50 0 0,0 145,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 40,60 L 110,60 A 110,110 0 0,1 110,280 L 40,280" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="52" y1="140" x2="52" y2="200" stroke="white" strokeWidth="4" />
+                      <line x1="40" y1="170" x2="52" y2="170" stroke="white" strokeWidth="2" />
+                      <circle cx="59" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      {/* Right-hand side Basket area lines (Wider corner three-point area) [1] */}
+                      <line x1="435" y1="120" x2="435" y2="220" stroke="white" strokeWidth="3.5" />
+                      <path d="M 521,150 A 20,20 0 0,0 521,190" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.2,2.2" />
+                      <path d="M 435,120 A 50,50 0 0,0 435,220" fill="none" stroke="white" strokeWidth="3" />
+                      <path d="M 435,120 A 50,50 0 0,1 435,220" fill="none" stroke="white" strokeWidth="2" strokeDasharray="2.5,2.5" />
+                      <path d="M 540,60 L 470,60 A 110,110 0 0,0 470,280 L 540,280" fill="none" stroke="white" strokeWidth="3.2" />
+                      <line x1="528" y1="140" x2="528" y2="200" stroke="white" strokeWidth="4" />
+                      <line x1="540" y1="170" x2="528" y2="170" stroke="white" strokeWidth="2" />
+                      <circle cx="521" cy="170" r="7" fill="none" stroke="#ff5500" strokeWidth="3" />
+
+                      <line x1="190" y1="30" x2="190" y2="40" stroke="white" strokeWidth="2" />
+                      <line x1="390" y1="30" x2="390" y2="40" stroke="white" strokeWidth="2" />
+                      <line x1="190" y1="300" x2="190" y2="310" stroke="white" strokeWidth="2" />
+                      <line x1="390" y1="300" x2="390" y2="310" stroke="white" strokeWidth="2" />
+
+                      <rect x="40" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="250" y="325" width="80" height="40" fill="#ebd9c8" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+                      <rect x="360" y="325" width="180" height="40" fill="#bfaea0" stroke="#9d8c7d" strokeWidth="1" rx="4" />
+
+                      <text x="130" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+                      <text x="290" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substitution box</text>
+                      <text x="450" y="348" fill="#4d3b2b" opacity="0.15" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Coaching box and Team bench area</text>
+
+                      {drawings.map(drawing => (
+                        <polyline
+                          key={drawing.id}
+                          points={projectDrawings(drawing.points, false)}
+                          fill="none"
+                          stroke={drawing.color}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      ))}
+
+                      {currentDrawingPoints.length > 1 && (
+                        <polyline
+                          points={projectDrawings(currentDrawingPoints, false)}
+                          fill="none"
+                          stroke={strokeColor}
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          opacity="0.9"
+                        />
+                      )}
+
+                      {showDiagramLabels && (
+                        <g className="transition-opacity duration-300 opacity-95">
+                          <style>{`
+                            .diag-lbl { font-family: sans-serif; font-size: 10px; font-weight: bold; fill: #2c1c0a; text-shadow: 1px 1px 1px #ffebda, -1px -1px 1px #ffebda, 1px -1px 1px #ffebda, -1px 1px 1px #ffebda; }
+                          `}</style>
+                          <text x="55" y="40" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="55" y="290" className="diag-lbl" textAnchor="start">Corner</text>
+                          <text x="55" y="100" className="diag-lbl" textAnchor="start">Short Corner</text>
+                          
+                          <text x="100" y="125" className="diag-lbl" textAnchor="end">Low Post / Block</text>
+                          <text x="480" y="125" className="diag-lbl" textAnchor="start">Low Post / Block</text>
+                          
+                          <text x="73" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                          <text x="507" y="160" className="diag-lbl" textAnchor="middle">Restricted area</text>
+                          
+                          <text x="145" y="115" className="diag-lbl" textAnchor="end">High Post / Elbow</text>
+                          <text x="435" y="115" className="diag-lbl" textAnchor="start">High Post / Elbow</text>
+                          
+                          <text x="205" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          <text x="375" y="174" className="diag-lbl" textAnchor="middle">Top of the Key</text>
+                          
+                          <text x="180" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+                          <text x="400" y="75" className="diag-lbl" textAnchor="middle">Wing</text>
+
+                          <text x="290" y="120" className="diag-lbl" textAnchor="middle">Center circle</text>
+                          <text x="290" y="55" className="diag-lbl" textAnchor="middle">Half-court line</text>
+                          <text x="290" y="25" className="diag-lbl" textAnchor="middle">Sideline</text>
+                          <text x="15" y="174" className="diag-lbl" textAnchor="middle" transform="rotate(-90 15 174)">Baseline or Endline</text>
+
+                          <text x="105" y="165" className="diag-lbl" textAnchor="middle" fontSize="8">Painted area</text>
+                          <text x="215" y="90" className="diag-lbl" textAnchor="start">Three-Point line / The Arc</text>
+                        </g>
+                      )}
+                    </svg>
+                  )}
+
+                  {/* ACTIVE PRESENTATION PLAYER TOKENS */}
+                  {tacticTokens.map(token => {
+                    const pos = isVerticalView ? { x: token.y, y: token.x } : { x: token.x, y: token.y };
+                    return (
+                      <div key={token.id}
+                        onPointerDown={e => handleCourtPointerDown(e, token.id)}
+                        onPointerMove={e => handleCourtPointerMove(e, token.id)}
+                        onPointerUp={e => handleCourtPointerUp(e, token.id)}
+                        onPointerCancel={e => handleCourtPointerCancel(e, token.id)}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === token.id ? 'z-20 scale-110' : ''}`}
+                        style={{ 
+                          left: `${pos.x}%`, 
+                          top: `${pos.y}%`, 
+                          transition: courtDragId === token.id ? 'none' : 'left 0.12s linear, top 0.12s linear',
+                          pointerEvents: activeTool === 'move' ? 'auto' : 'none'
+                        }}>
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/95 shadow-lg flex items-center justify-center font-black text-white text-xs md:text-sm ${
+                          token.team === 'home' ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                        } ${courtDragId === token.id ? 'ring-2 ring-yellow-400' : ''}`}>
+                          {token.number}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* DRAGGABLE BALL — syncs live to viewer like player tokens */}
+                  {(() => {
+                    const bpos = isVerticalView ? { x: ballPos.y, y: ballPos.x } : { x: ballPos.x, y: ballPos.y };
+                    return (
+                      <div
+                        onPointerDown={e => handleCourtPointerDown(e, 'ball')}
+                        onPointerMove={e => handleCourtPointerMove(e, 'ball')}
+                        onPointerUp={e => handleCourtPointerUp(e, 'ball')}
+                        onPointerCancel={e => handleCourtPointerCancel(e, 'ball')}
+                        title="Ball (drag to move)"
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 z-10 touch-none ${isViewer ? '' : 'cursor-grab active:cursor-grabbing'} ${courtDragId === 'ball' ? 'z-20 scale-125' : ''}`}
+                        style={{
+                          left: `${bpos.x}%`,
+                          top: `${bpos.y}%`,
+                          transition: courtDragId === 'ball' ? 'none' : 'left 0.12s linear, top 0.12s linear',
+                          pointerEvents: activeTool === 'move' ? 'auto' : 'none'
+                        }}>
+                        <div className={`relative w-6 h-6 sm:w-7 sm:h-7 rounded-full shadow-lg border border-black/40 bg-[radial-gradient(circle_at_30%_30%,#fbbf24,#d97706_55%,#92400e)] ${courtDragId === 'ball' ? 'ring-2 ring-yellow-300' : ''}`}>
+                          {/* seams */}
+                          <span className="absolute left-1/2 top-[8%] bottom-[8%] w-[1.5px] -translate-x-1/2 bg-black/60 rounded" />
+                          <span className="absolute top-1/2 left-[8%] right-[8%] h-[1.5px] -translate-y-1/2 bg-black/60 rounded" />
+                          <span className="absolute inset-[3px] rounded-full border border-black/50" style={{ clipPath: 'polygon(0 62%, 100% 38%, 100% 46%, 0 70%)' }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                </div>
               </div>
             </div>
             
-            <p className="text-center text-xs text-slate-500 italic">💡 The court lines are inset. You can drag and position player tokens completely outside of the white boundary lines.</p>
+            <p className="text-center text-xs text-slate-500 italic">💡 Tactical positioning is completely independent of scoreboard roster statuses.</p>
           </div>
         )}
 
@@ -715,10 +2253,12 @@ export const BasketballBoard: React.FC = () => {
 // ==========================================
 const RosterPanel: React.FC<{
   team: 'home' | 'away';
+  teamName: string;
   players: Player[];
   onAddPoints: (team: 'home' | 'away', index: number, pts: number) => void;
   onAddFoul: (team: 'home' | 'away', index: number, delta: number) => void;
   onRename: (team: 'home' | 'away', id: string, name: string) => void;
+  onChangeNumber: (team: 'home' | 'away', id: string, number: number) => void;
   draggedId: string | null;
   dropTargetId: string | null;
   onDragStart: (e: React.DragEvent, id: string) => void;
@@ -728,10 +2268,22 @@ const RosterPanel: React.FC<{
   selectedCourtId: string | null;
   onSelectCourt: (id: string) => void;
   onBenchClick: (id: string) => void;
+  isViewer?: boolean;
+  onClear?: () => void;
+  onEmptyCourtDrop?: (e: React.DragEvent) => void;
+  onEmptyBenchDrop?: (e: React.DragEvent) => void;
+  onCourtGridDrop?: (e: React.DragEvent) => void;
+  onUndoLast?: (team: 'home' | 'away') => void;
+  gameEvents?: GameEvent[];
+  onRemovePlayer?: (team: 'home' | 'away', id: string) => void;
 }> = ({ 
-  team, players, onAddPoints, onAddFoul, onRename, 
+  team, teamName, players, onAddPoints, onAddFoul, onRename, 
+  onChangeNumber,
   draggedId, dropTargetId, onDragStart, onDrop, onDragOver, onDragLeave,
-  selectedCourtId, onSelectCourt, onBenchClick 
+  selectedCourtId, onSelectCourt, onBenchClick,
+  isViewer, onClear,
+  onEmptyCourtDrop, onEmptyBenchDrop, onCourtGridDrop,
+  onUndoLast, gameEvents, onRemovePlayer
 }) => {
   const isHome = team === 'home';
   const borderColor = isHome ? 'border-orange-500/60' : 'border-blue-500/60';
@@ -742,108 +2294,187 @@ const RosterPanel: React.FC<{
   const courtPlayers = players.filter(p => p.status === 'court');
   const benchPlayers = players.filter(p => p.status === 'bench');
 
+  const teamScorers = [...players]
+    .filter(p => p.points > 0 || p.fouls > 0)
+    .sort((a, b) => (b.points - a.points) || (b.fouls - a.fouls));
+
   const isDropTarget = (id: string) => dropTargetId === id && draggedId !== null && draggedId !== id;
   const isDragging = (id: string) => draggedId === id;
+  const lastTeamEvent = (team: 'home' | 'away') => [...(gameEvents ?? [])].reverse().find(ev => ev.team === team);
 
   return (
     <div className={`rounded-2xl border-2 ${borderColor} bg-slate-800/30 shadow-xl overflow-hidden`}>
       <div className={`${headerBg} px-4 py-2.5 border-b ${borderColor} flex items-center justify-between`}>
         <div className="flex items-center gap-2">
           <UserCheck size={15} className={accentText} />
-          <h3 className={`text-base font-bold ${accentText}`}>{isHome ? 'Home' : 'Away'} Roster</h3>
+          <h3 className={`text-base font-bold ${accentText} uppercase`}>{teamName} Roster</h3>
         </div>
         <div className="flex items-center gap-2 text-[10px] text-slate-500">
           <span>Court: {courtPlayers.length}</span>
           <span className="text-slate-700">|</span>
           <span>Bench: {benchPlayers.length}</span>
           <span className="text-slate-700">|</span>
-          <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click or drag to sub</span>
+          <span className="text-[10px] text-slate-500 flex items-center gap-0.5"><ArrowRightLeft size={9} />Click/drag to sub</span>
+          {!isViewer && onUndoLast && lastTeamEvent(team) && (
+            <button onClick={() => onUndoLast(team)} className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-0.5">
+              <Undo2 size={10} /> Undo
+            </button>
+          )}
+          {!isViewer && onClear && (
+            <button onClick={onClear} className="ml-1 text-[10px] text-red-400 hover:text-red-300 flex items-center gap-0.5">
+              <Trash2 size={10} /> Clear
+            </button>
+          )}
         </div>
       </div>
 
       <div className="p-3 space-y-3">
-        {/* Court */}
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">On Court</span>
-          <div className="grid grid-cols-5 gap-1.5">
-            {courtPlayers.map((player, idx) => {
-              const isSelected = selectedCourtId === player.id;
-              return (
-                <div key={player.id}
-                  draggable
-                  onDragStart={e => onDragStart(e, player.id)}
-                  onDrop={e => onDrop(e, player.id)}
-                  onDragOver={e => onDragOver(e, player.id)}
-                  onDragLeave={onDragLeave}
-                  onClick={() => onSelectCourt(player.id)}
-                  className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all cursor-pointer ${
-                    isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                  } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
-                    isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
-                  } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
-
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-xs mb-0.5 shadow-md ${
-                    isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
-                  }`}>
-                    {player.number}
-                  </div>
-                  <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
-                    className="text-[9px] text-slate-300 truncate max-w-[56px] leading-tight group" />
-                  <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points}pts</div>
-                  <div className={`text-[9px] font-semibold ${player.fouls >= 4 ? 'text-red-400' : 'text-slate-600'}`}>{player.fouls}f</div>
-                  
-                  {/* Score buttons with stopPropagation to avoid toggling select card */}
-                  <div className="flex gap-0.5 mt-1">
-                    {[1, 2, 3].map(p => (
-                      <button key={p} 
-                        onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
-                        className="bg-slate-700/80 hover:bg-slate-600 text-[8px] font-bold px-1 py-0.5 rounded text-white transition-colors active:scale-95">+{p}</button>
-                    ))}
-                  </div>
-                  
-                  {/* Foul buttons with stopPropagation */}
-                  <div className="flex gap-0.5 mt-0.5">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }} 
-                      className="bg-red-900/60 hover:bg-red-800 text-[8px] font-bold px-1 py-0.5 rounded text-red-300 transition-colors active:scale-95">+F</button>
-                    {player.fouls > 0 && (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }} 
-                        className="bg-slate-700/50 hover:bg-slate-600 text-[8px] font-bold px-1 py-0.5 rounded text-slate-400 transition-colors active:scale-95">-F</button>
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => onCourtGridDrop?.(e)}
+            onDragLeave={onDragLeave}
+            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            {Array.from({ length: 5 }).map((_, idx) => {
+              const player = courtPlayers[idx];
+              if (player) {
+                const isSelected = selectedCourtId === player.id;
+                return (
+                  <div key={player.id}
+                    draggable={!isViewer}
+                    onContextMenu={e => e.preventDefault()}
+                    onDragStart={e => onDragStart(e, player.id)}
+                    onDrop={e => { e.stopPropagation(); onDrop(e, player.id); }}
+                    onDragOver={e => onDragOver(e, player.id)}
+                    onDragLeave={onDragLeave}
+                    onClick={() => onSelectCourt(player.id)}
+                    className={`relative p-1.5 rounded-xl border-2 flex flex-col items-center bg-slate-800/90 transition-all ${isViewer ? '' : 'cursor-pointer'} ${
+                      isDragging(player.id) ? 'opacity-40 scale-95' : ''
+                    } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 scale-105 shadow-emerald-900/30 shadow-lg' : 
+                      isSelected ? 'border-yellow-400 ring-2 ring-yellow-400 scale-105 shadow-lg' : 'border-slate-700/60'
+                    } ${player.fouls >= 4 ? 'ring-2 ring-red-500/40' : ''}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-black text-xs md:text-sm mb-0.5 shadow-md ${
+                      isHome ? 'bg-gradient-to-br from-red-500 to-red-700' : 'bg-gradient-to-br from-blue-500 to-blue-700'
+                    }`}>
+                      <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+                    </div>
+                    {!isViewer && onRemovePlayer && (
+                      <button onClick={(e) => { e.stopPropagation(); onRemovePlayer(team, player.id); }}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-900/90 border border-slate-600 text-slate-300 hover:text-white hover:border-white flex items-center justify-center leading-none">
+                        ✕
+                      </button>
+                    )}
+                    
+                    <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
+                      className="text-sm text-slate-300 truncate max-w-[64px] sm:max-w-[72px] leading-tight group" />
+                    <div className={`text-[10px] font-bold ${accentPts} mt-0.5`}>{player.points} pts</div>
+                    <div className={`mt-1 text-sm text-slate-400 flex items-center gap-1`}>
+                      <span className="text-xs md:text-sm">Fouls:</span>
+                      <span className={`${player.fouls >= 4 ? 'text-red-400' : 'text-slate-300'} font-bold text-sm md:text-base`}>{player.fouls}</span>
+                    </div>
+                    
+                    {!isViewer && (
+                      <>
+                        <div className="flex flex-wrap sm:flex-row gap-2 mt-2 w-full items-stretch justify-center">
+                          {[1, 2, 3].map(p => (
+                            <button key={p}
+                              onClick={(e) => { e.stopPropagation(); onAddPoints(team, idx, p); }}
+                              className="bg-slate-700/80 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-white transition-colors active:scale-95">
+                              +{p}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <div className="flex flex-wrap sm:flex-row gap-2 mt-1 w-full items-stretch justify-center">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, 1); }}
+                            className="bg-red-900/60 hover:bg-red-800 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-red-300 transition-colors active:scale-95">+F</button>
+                          {player.fouls > 0 && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onAddFoul(team, idx, -1); }}
+                              className="bg-slate-700/50 hover:bg-slate-600 text-sm font-bold flex items-center justify-center w-9 h-9 min-w-[36px] px-2 py-1 rounded-md text-slate-400 transition-colors active:scale-95">-F</button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
+                );
+              }
+              return (
+                <div key={`empty-court-${idx}`}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => onEmptyCourtDrop?.(e)}
+                  onDragLeave={onDragLeave}
+                  className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3 min-h-[100px] flex items-center justify-center">
+                  <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Drop here</div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Bench */}
         <div>
           <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Bench</span>
-          <div className="grid grid-cols-5 gap-1.5">
-            {benchPlayers.map(player => (
-              <div key={player.id}
-                draggable
-                onDragStart={e => onDragStart(e, player.id)}
-                onDrop={e => onDrop(e, player.id)}
-                onDragOver={e => onDragOver(e, player.id)}
-                onDragLeave={onDragLeave}
-                onClick={() => onBenchClick(player.id)}
-                className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
-                  isDragging(player.id) ? 'opacity-40 scale-95' : ''
-                } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-700/40'
-                }`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white/60 font-bold text-[9px] mb-0.5 ${
-                  isHome ? 'bg-red-900/50' : 'bg-blue-900/50'
-                }`}>
-                  {player.number}
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => onEmptyBenchDrop?.(e)}
+            onDragLeave={onDragLeave}
+            className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+            {Array.from({ length: Math.max(benchPlayers.length + 3, 6) }).map((_, idx) => {
+              const player = benchPlayers[idx];
+              if (player) {
+                return (
+                  <div key={player.id}
+                    draggable={!isViewer}
+                    onContextMenu={e => e.preventDefault()}
+                    onDragStart={e => onDragStart(e, player.id)}
+                    onDrop={e => { e.stopPropagation(); onDrop(e, player.id); }}
+                    onDragOver={e => onDragOver(e, player.id)}
+                    onDragLeave={onDragLeave}
+                    onClick={() => onBenchClick(player.id)}
+                    className={`relative p-1.5 rounded-xl border flex flex-col items-center cursor-grab active:cursor-grabbing transition-all ${
+                      isDragging(player.id) ? 'opacity-40 scale-95' : ''
+                    } ${isDropTarget(player.id) ? 'border-emerald-400 ring-2 ring-emerald-400 bg-emerald-900/20 scale-105' : 'border-slate-700/40 bg-slate-800/20 hover:bg-slate-750 flex flex-col items-center justify-pointer transition-all hover:scale-105'}`}>
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center text-white/60 font-bold text-[10px] md:text-xs mb-0.5 ${
+                      isHome ? 'bg-red-900/50' : 'bg-blue-950/50'
+                    }`}>
+                      <InlineNumber num={player.number} onSave={(v) => onChangeNumber(team, player.id, v)} className="text-sm" compact={true} disabled={isViewer} />
+                    </div>
+                    <InlineName name={player.name} onSave={n => onRename(team, player.id, n)} disabled={isViewer}
+                      className="text-sm text-slate-500 truncate max-w-[64px] sm:max-w-[72px]" />
+                    <div className={`text-sm ${accentPts} opacity-60 mt-0.5`}>{player.points} pts</div>
+                  </div>
+                );
+              }
+              return (
+                <div key={`empty-bench-${idx}`}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => onEmptyBenchDrop?.(e)}
+                  onDragLeave={onDragLeave}
+                  className="rounded-xl border border-dashed border-slate-700/60 bg-slate-900/40 p-3 min-h-[80px] flex items-center justify-center">
+                  <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Drop here</div>
                 </div>
-                <InlineName name={player.name} onSave={n => onRename(team, player.id, n)}
-                  className="text-[9px] text-slate-500 truncate max-w-[52px]" />
-                <div className={`text-[9px] ${accentPts} opacity-60 mt-0.5`}>{player.points}pts</div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            {teamScorers.length > 0 ? teamScorers.map(p => (
+              <div key={p.id} className={`flex items-center gap-2 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
+                  <InlineNumber num={p.number} onSave={(v) => onChangeNumber(team, p.id, v)} className="text-xs" compact={true} disabled={isViewer} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">Fouls: <span className={`font-bold ${p.fouls >= 4 ? 'text-red-400' : isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.fouls}</span></span>
+                </div>
+                <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
               </div>
-            ))}
+            )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
           </div>
         </div>
       </div>
