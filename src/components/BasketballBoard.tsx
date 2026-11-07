@@ -33,6 +33,7 @@ interface GameEvent {
   homeScoreBefore: number;
   awayScoreBefore: number;
   timestamp: number;
+  foulPeriod?: number;
 }
 
 // ==========================================
@@ -116,6 +117,13 @@ export const BasketballBoard: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [inputMins, setInputMins] = useState('10');
   const [period, setPeriod] = useState(1);
+  const [foulPeriod, setFoulPeriod] = useState(0);
+
+  const changePeriod = (nextPeriod: number) => {
+    if (nextPeriod === period) return;
+    setPeriod(nextPeriod);
+    setFoulPeriod(current => current + 1);
+  };
   const [gameEvents, setGameEvents] = useState<GameEvent[]>([]);
   const [showEvents, setShowEvents] = useState(false);
 
@@ -143,8 +151,10 @@ export const BasketballBoard: React.FC = () => {
   // Derived values
   const homeScore = homePlayers.reduce((s, p) => s + p.points, 0);
   const awayScore = awayPlayers.reduce((s, p) => s + p.points, 0);
-  const homeFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
-  const awayFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+  // Team fouls belong to the current period, regardless of substitutions.
+  const periodFouls = gameEvents.filter(ev => ev.type === 'foul' && ev.foulPeriod === foulPeriod);
+  const homeFouls = periodFouls.filter(ev => ev.team === 'home').reduce((sum, ev) => sum + ev.value, 0);
+  const awayFouls = periodFouls.filter(ev => ev.team === 'away').reduce((sum, ev) => sum + ev.value, 0);
 
   // Scoresheet map
   const scoresheetMap = useMemo(() => {
@@ -202,9 +212,18 @@ export const BasketballBoard: React.FC = () => {
     });
   }, [homePlayers, awayPlayers]);
 
-  // Foul assignment actions
+  // Record personal fouls throughout the game and team fouls for this period.
   const addFoul = useCallback((team: 'home' | 'away', courtIndex: number, delta: number) => {
+    const players = team === 'home' ? homePlayers : awayPlayers;
+    const target = players.filter(p => p.status === 'court')[courtIndex];
+    if (!target) return;
+    const value = Math.max(0, target.fouls + delta) - target.fouls;
+    if (!value) return;
+    const currentFouls = gameEvents
+      .filter(ev => ev.type === 'foul' && ev.playerId === target.id && ev.foulPeriod === foulPeriod)
+      .reduce((sum, ev) => sum + ev.value, 0);
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
+<<<<<<< Updated upstream
     setter(prev => {
       const court = prev.filter(p => p.status === 'court');
       const target = court[courtIndex];
@@ -221,20 +240,29 @@ export const BasketballBoard: React.FC = () => {
       return prev.map(p => p.id === target.id ? { ...p, fouls: Math.max(0, p.fouls + delta) } : p);
     });
   }, [homePlayers, awayPlayers]);
+=======
+    setter(prev => prev.map(p => p.id === target.id ? { ...p, fouls: p.fouls + value } : p));
+    setGameEvents(prev => [...prev, {
+      id: uid(), type: 'foul', team, playerId: target.id,
+      playerNumber: target.number, playerName: target.name,
+      value, homeScoreBefore: homeScore, awayScoreBefore: awayScore, timestamp: Date.now(),
+      // Correcting an earlier personal foul must not subtract from this period's total.
+      foulPeriod: value > 0 || currentFouls > 0 ? foulPeriod : undefined,
+    }]);
+  }, [homePlayers, awayPlayers, gameEvents, foulPeriod, homeScore, awayScore]);
+>>>>>>> Stashed changes
 
   const undoLast = useCallback(() => {
-    setGameEvents(prev => {
-      if (!prev.length) return prev;
-      const last = prev[prev.length - 1];
-      const setter = last.team === 'home' ? setHomePlayers : setAwayPlayers;
-      setter(players => players.map(p =>
-        p.id === last.playerId
-          ? { ...p, [last.type === 'score' ? 'points' : 'fouls']: Math.max(0, (last.type === 'score' ? p.points : p.fouls) - last.value) }
-          : p
-      ));
-      return prev.slice(0, -1);
-    });
-  }, []);
+    const last = gameEvents[gameEvents.length - 1];
+    if (!last) return;
+    const setter = last.team === 'home' ? setHomePlayers : setAwayPlayers;
+    setter(players => players.map(p =>
+      p.id === last.playerId
+        ? { ...p, [last.type === 'score' ? 'points' : 'fouls']: Math.max(0, (last.type === 'score' ? p.points : p.fouls) - last.value) }
+        : p
+    ));
+    setGameEvents(prev => prev.slice(0, -1));
+  }, [gameEvents]);
 
   const resetGame = useCallback(() => {
     setHomePlayers(createHomePlayers());
@@ -243,6 +271,7 @@ export const BasketballBoard: React.FC = () => {
     setShotClock(24);
     setIsRunning(false);
     setPeriod(1);
+    setFoulPeriod(0);
     setGameEvents([]);
     setSelectedCourtId(null);
   }, []);
@@ -390,9 +419,9 @@ export const BasketballBoard: React.FC = () => {
                 <div className="flex flex-col items-center gap-2.5 py-4 md:py-5 bg-slate-800/50">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest">Period</span>
-                    <button onClick={() => setPeriod(p => Math.max(1, p - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>
+                    <button onClick={() => changePeriod(Math.max(1, period - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>
                     <span className="text-lg font-black text-white tabular-nums min-w-[1.25rem] text-center">{period}</span>
-                    <button onClick={() => setPeriod(p => Math.min(9, p + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>
+                    <button onClick={() => changePeriod(Math.min(9, period + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>
                   </div>
 
                   <div className="text-center">
@@ -577,7 +606,7 @@ export const BasketballBoard: React.FC = () => {
                           </span>
                           <span className="text-slate-300">#{ev.playerNumber} {ev.playerName}</span>
                           <span className={ev.type === 'score' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                            {ev.type === 'score' ? `+${ev.value} pts` : `+${ev.value} foul`}
+                            {ev.type === 'score' ? `+${ev.value} pts` : `${ev.value > 0 ? '+' : ''}${ev.value} foul`}
                           </span>
                           <span className="text-slate-600 ml-auto">{ev.homeScoreBefore + (ev.team === 'home' && ev.type === 'score' ? ev.value : 0)} – {ev.awayScoreBefore + (ev.team === 'away' && ev.type === 'score' ? ev.value : 0)}</span>
                         </div>
@@ -836,6 +865,25 @@ const RosterPanel: React.FC<{
             ))}
           </div>
         </div>
+<<<<<<< Updated upstream
+=======
+            
+            {/* Player stats: quick per-team scorers under roster (restored style) */}
+            <div>
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
+              <div className="flex items-center gap-4">
+                {teamScorers.length > 0 ? teamScorers.map(p => (
+                  <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
+                      <InlineNumber num={p.number} onSave={() => {}} className="text-xs" compact />
+                    </div>
+                    <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
+                    <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
+                  </div>
+                )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
+              </div>
+            </div>
+>>>>>>> Stashed changes
       </div>
     </div>
   );
