@@ -223,24 +223,6 @@ export const BasketballBoard: React.FC = () => {
       .filter(ev => ev.type === 'foul' && ev.playerId === target.id && ev.foulPeriod === foulPeriod)
       .reduce((sum, ev) => sum + ev.value, 0);
     const setter = team === 'home' ? setHomePlayers : setAwayPlayers;
-<<<<<<< Updated upstream
-    setter(prev => {
-      const court = prev.filter(p => p.status === 'court');
-      const target = court[courtIndex];
-      if (!target) return prev;
-      if (delta > 0) {
-        const hs = homePlayers.reduce((s, p) => s + p.points, 0);
-        const as = awayPlayers.reduce((s, p) => s + p.points, 0);
-        setGameEvents(evs => [...evs, {
-          id: uid(), type: 'foul', team, playerId: target.id,
-          playerNumber: target.number, playerName: target.name,
-          value: delta, homeScoreBefore: hs, awayScoreBefore: as, timestamp: Date.now()
-        }]);
-      }
-      return prev.map(p => p.id === target.id ? { ...p, fouls: Math.max(0, p.fouls + delta) } : p);
-    });
-  }, [homePlayers, awayPlayers]);
-=======
     setter(prev => prev.map(p => p.id === target.id ? { ...p, fouls: p.fouls + value } : p));
     setGameEvents(prev => [...prev, {
       id: uid(), type: 'foul', team, playerId: target.id,
@@ -250,7 +232,6 @@ export const BasketballBoard: React.FC = () => {
       foulPeriod: value > 0 || currentFouls > 0 ? foulPeriod : undefined,
     }]);
   }, [homePlayers, awayPlayers, gameEvents, foulPeriod, homeScore, awayScore]);
->>>>>>> Stashed changes
 
   const undoLast = useCallback(() => {
     const last = gameEvents[gameEvents.length - 1];
@@ -865,25 +846,6 @@ const RosterPanel: React.FC<{
             ))}
           </div>
         </div>
-<<<<<<< Updated upstream
-=======
-            
-            {/* Player stats: quick per-team scorers under roster (restored style) */}
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest block mb-2">Player Stats</span>
-              <div className="flex items-center gap-4">
-                {teamScorers.length > 0 ? teamScorers.map(p => (
-                  <div key={p.id} className={`flex items-center gap-3 px-2 py-1 rounded ${isHome ? 'bg-orange-900/5' : 'bg-blue-900/5'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-xs ${isHome ? 'bg-orange-500' : 'bg-blue-500'}`}>
-                      <InlineNumber num={p.number} onSave={() => {}} className="text-xs" compact />
-                    </div>
-                    <span className="text-[11px] text-slate-200 truncate max-w-[9rem]">#{p.number} {p.name}</span>
-                    <span className={`ml-auto text-[11px] font-bold ${isHome ? 'text-amber-300' : 'text-sky-300'}`}>{p.points} pts</span>
-                  </div>
-                )) : <span className="text-[10px] text-slate-600 italic">No scorers yet</span>}
-              </div>
-            </div>
->>>>>>> Stashed changes
       </div>
     </div>
   );
