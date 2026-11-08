@@ -65,8 +65,8 @@ const DisplayBoard: React.FC = () => {
       const courtAwayFouls = s.awayPlayers ? s.awayPlayers.filter((p: any) => p.status === 'court').reduce((sum: number, p: any) => sum + (p.fouls || 0), 0) : null;
       const hs = typeof s.homeScore === 'number' ? s.homeScore : (playerHome ?? 0) + (s.homeManualScore ?? 0);
       const as = typeof s.awayScore === 'number' ? s.awayScore : (playerAway ?? 0) + (s.awayManualScore ?? 0);
-      const hFouls = typeof s.homeFouls === 'number' && !s.homePlayers ? s.homeFouls : (courtHomeFouls ?? 0) + (s.homeManualFouls ?? 0);
-      const aFouls = typeof s.awayFouls === 'number' && !s.awayPlayers ? s.awayFouls : (courtAwayFouls ?? 0) + (s.awayManualFouls ?? 0);
+      const hFouls = typeof s.homeFouls === 'number' ? s.homeFouls : (courtHomeFouls ?? 0) + (s.homeManualFouls ?? 0);
+      const aFouls = typeof s.awayFouls === 'number' ? s.awayFouls : (courtAwayFouls ?? 0) + (s.awayManualFouls ?? 0);
 
       setState((prev) => ({
         homeScore: hs,

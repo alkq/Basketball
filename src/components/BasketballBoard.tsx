@@ -276,6 +276,7 @@ export const BasketballBoard: React.FC = () => {
   const [awayManualScore, setAwayManualScore] = useState(0);
   const [homeManualFouls, setHomeManualFouls] = useState(0);
   const [awayManualFouls, setAwayManualFouls] = useState(0);
+  const [periodFoulBaseline, setPeriodFoulBaseline] = useState<Record<string, number>>({});
   const [manualUndo, setManualUndo] = useState<Array<{ team: 'home' | 'away'; type: 'score' | 'foul'; delta: number }>>([]);
 
   // UI View States
@@ -457,10 +458,19 @@ export const BasketballBoard: React.FC = () => {
   const awayPlayerScore = awayPlayers.reduce((s, p) => s + p.points, 0);
   const homeScore = homePlayerScore + homeManualScore;
   const awayScore = awayPlayerScore + awayManualScore;
-  const homePlayerFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
-  const awayPlayerFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + p.fouls, 0);
+  const homePlayerFouls = homePlayers.filter(p => p.status === 'court').reduce((s, p) => s + Math.max(0, p.fouls - (periodFoulBaseline[p.id] ?? 0)), 0);
+  const awayPlayerFouls = awayPlayers.filter(p => p.status === 'court').reduce((s, p) => s + Math.max(0, p.fouls - (periodFoulBaseline[p.id] ?? 0)), 0);
   const homeFouls = homePlayerFouls + homeManualFouls;
   const awayFouls = awayPlayerFouls + awayManualFouls;
+
+  const changePeriod = (nextPeriod: number) => {
+    if (isViewer || nextPeriod === period) return;
+    setPeriodFoulBaseline(Object.fromEntries([...homePlayers, ...awayPlayers, ...poolPlayers].map(p => [p.id, p.fouls])));
+    setHomeManualFouls(0);
+    setAwayManualFouls(0);
+    setManualUndo(prev => prev.filter(entry => entry.type !== 'foul'));
+    setPeriod(nextPeriod);
+  };
 
   const scoresheetMap = useMemo(() => {
     const home: Record<number, { playerNumber: number; playerName: string }> = {};
@@ -588,6 +598,7 @@ export const BasketballBoard: React.FC = () => {
         if (typeof data.awayName === 'string' && data.awayName.trim()) setAwayName(data.awayName);
         if (typeof data.homeManualScore === 'number') setHomeManualScore(data.homeManualScore);
         if (typeof data.awayManualScore === 'number') setAwayManualScore(data.awayManualScore);
+        if (data.periodFoulBaseline) setPeriodFoulBaseline(data.periodFoulBaseline);
         if (typeof data.homeManualFouls === 'number') setHomeManualFouls(data.homeManualFouls);
         if (typeof data.awayManualFouls === 'number') setAwayManualFouls(data.awayManualFouls);
       })
@@ -626,6 +637,9 @@ export const BasketballBoard: React.FC = () => {
         awayManualScore,
         homeManualFouls,
         awayManualFouls,
+        periodFoulBaseline,
+        homeFouls,
+        awayFouls,
         gameTime,
         shotClock,
         isRunning,
@@ -639,7 +653,7 @@ export const BasketballBoard: React.FC = () => {
         ballPos
       }
     });
-  }, [homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, tacticTokens, ballPos, roomId]);
+  }, [homePlayers, awayPlayers, homeName, awayName, homeManualScore, awayManualScore, homeManualFouls, awayManualFouls, periodFoulBaseline, homeFouls, awayFouls, gameTime, shotClock, isRunning, period, gameEvents, view, clockMode, mode, isSyncEnabled, drawings, currentDrawingPoints, tacticTokens, ballPos, roomId]);
 
   // ── INDEPENDENT MULTI-POINTER TOUCH & DRAG EVENT HANDLERS ──
   // Also handles the ball token (playerId === 'ball').
@@ -1016,6 +1030,7 @@ export const BasketballBoard: React.FC = () => {
     setShotClock(24);
     setIsRunning(false);
     setPeriod(1);
+    setPeriodFoulBaseline({});
     setGameEvents([]);
     setSelectedCourtId(null);
     setTrainingHomeScore(0);
@@ -1411,9 +1426,9 @@ export const BasketballBoard: React.FC = () => {
                 <div className="col-span-2 sm:col-span-1 order-first sm:order-none flex flex-col items-center gap-2 py-3 sm:gap-2.5 sm:py-4 bg-slate-800/50">
                   <div className="flex items-center gap-1.5">
                     <span className="text-slate-500 text-[10px] font-semibold uppercase tracking-widest">Period</span>
-                    {!isViewer && <button onClick={() => setPeriod(p => Math.max(1, p - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>}
+                    {!isViewer && <button onClick={() => changePeriod(Math.max(1, period - 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronDown size={13} /></button>}
                     <span className="text-lg font-black text-white tabular-nums min-w-[1.25rem] text-center">{period}</span>
-                    {!isViewer && <button onClick={() => setPeriod(p => Math.min(9, p + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>}
+                    {!isViewer && <button onClick={() => changePeriod(Math.min(9, period + 1))} className="p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"><ChevronUp size={13} /></button>}
                   </div>
 
                   <div className="text-center">
